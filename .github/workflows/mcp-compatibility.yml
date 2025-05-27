@@ -1,0 +1,85 @@
+name: MCP SDK Version Compatibility Testing
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  test-mcp-sdk-versions:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["18", "20", "22"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Fetch all available MCP SDK versions (≥1.0)
+        id: get-versions
+        run: |
+          # Get all versions >= 1.0 and filter to get latest patch for each minor version
+          VERSIONS=$(pnpm view @modelcontextprotocol/sdk versions --json | jq -c '
+            map(select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))) |
+            map(select(split(".")[0] | tonumber >= 1)) |
+            group_by(split(".")[0:2] | join(".")) |
+            map(max_by(split(".") | map(tonumber))) |
+            sort_by(split(".") | map(tonumber))
+          ')
+          echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
+          echo "Found versions: $VERSIONS"
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run test suite against each MCP SDK version
+        run: |
+          VERSIONS='${{ steps.get-versions.outputs.versions }}'
+          echo "Testing MCP versions on Node ${{ matrix.node }}"
+
+          # Parse JSON array
+          for version in $(echo "$VERSIONS" | jq -r '.[]'); do
+            echo "Testing @modelcontextprotocol/sdk@$version"
+            
+            # Install specific version
+            pnpm add -D @modelcontextprotocol/sdk@$version
+            
+            # Run all tests
+            if pnpm test; then
+              echo "✅ Compatible with @modelcontextprotocol/sdk@$version on Node ${{ matrix.node }}"
+            else
+              echo "❌ Not compatible with @modelcontextprotocol/sdk@$version on Node ${{ matrix.node }}"
+              exit 1
+            fi
+          done
+
+  compatibility-summary:
+    needs: test-mcp-sdk-versions
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Generate MCP SDK compatibility summary report
+        run: |
+          echo "# MCP SDK Compatibility Report"
+          echo ""
+          echo "Tested on: $(date)"
+          echo "Node versions tested: 18, 20, 22"
+          echo ""
+          echo "See individual job results for detailed compatibility information."
