@@ -10,6 +10,8 @@
     <span> · </span>
     <a href="#why-use-mcpcat-">Features</a>
     <span> · </span>
+    <a href="https://docs.mcpcat.io">Docs</a>
+    <span> · </span>
     <a href="https://mcpcat.io">Website</a>
     <span> · </span>
     <a href="#free-for-open-source">Open Source</a>
@@ -34,7 +36,7 @@ MCPcat is an analytics platform for MCP server owners 🐱. It captures user int
 npm install -S mcpcat
 ```
 
-To learn more about us, check us out [here](https://mcpcat.io)
+To learn more about us, check us out [here](https://mcpcat.io). For detailed guides visit our [documentation](https://docs.mcpcat.io).
 
 ## Why use MCPcat? 🤔
 
