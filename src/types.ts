@@ -1,3 +1,4 @@
+import { CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { PublishEventRequest } from "mcpcat-api";
 
 export interface MCPCatOptions {
@@ -10,6 +11,22 @@ export interface MCPCatOptions {
   ) => Promise<UserIdentity | null>;
   redactSensitiveInformation?: RedactFunction;
 }
+
+export type ToolCallback =
+  | ((
+      args: any,
+      extra: CompatibleRequestHandlerExtra,
+    ) => CallToolResult | Promise<CallToolResult>)
+  | ((
+      extra: CompatibleRequestHandlerExtra,
+    ) => CallToolResult | Promise<CallToolResult>);
+
+export type RegisteredTool = {
+  description?: string;
+  inputSchema?: any;
+  callback: ToolCallback;
+  update?: (...args: any[]) => any;
+};
 
 export type RedactFunction = (text: string) => Promise<string>;
 
@@ -34,6 +51,21 @@ export interface CompatibleRequestHandlerExtra {
 export interface ServerClientInfoLike {
   name?: string;
   version?: string;
+}
+
+export interface HighLevelMCPServerLike {
+  _registeredTools: { [name: string]: RegisteredTool };
+  server: MCPServerLike;
+  // Tool registration methods - simplified signatures without Zod dependency
+  tool?(name: string, cb: ToolCallback): void;
+  tool?(name: string, description: string, cb: ToolCallback): void;
+  tool?(name: string, paramsSchema: any, cb: ToolCallback): void;
+  tool?(
+    name: string,
+    description: string,
+    paramsSchema: any,
+    cb: ToolCallback,
+  ): void;
 }
 
 export interface MCPServerLike {

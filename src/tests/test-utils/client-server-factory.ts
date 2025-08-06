@@ -1,11 +1,8 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import {
-  CreateMessageRequestSchema,
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { z } from "zod";
 
 interface Todo {
   id: string;
@@ -23,129 +20,72 @@ export function resetTodos() {
 
 export async function setupTestServerAndClient() {
   // Create server instance
-  const server = new Server(
+  const server = new McpServer({
+    name: "test server",
+    version: "1.0",
+  });
+
+  // Register tools with the server
+  server.tool(
+    "add_todo",
+    "Add a new todo item",
     {
-      name: "test server",
-      version: "1.0",
+      text: z.string().describe("The text of the todo item"),
     },
-    {
-      capabilities: {
-        prompts: {},
-        resources: {},
-        tools: {},
-        logging: {},
-        sampling: {},
-      },
-      enforceStrictCapabilities: true,
+    async (args) => {
+      const todo: Todo = {
+        id: String(nextId++),
+        text: args.text,
+        completed: false,
+      };
+      todos.push(todo);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Added todo: "${args.text}" with ID ${todo.id}`,
+          },
+        ],
+      };
     },
   );
 
-  // Register tools with the server
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
+  server.tool("list_todos", "List all todo items", {}, async () => {
+    const todoList = todos
+      .map((todo) => `${todo.id}: ${todo.text} ${todo.completed ? "✓" : "○"}`)
+      .join("\n");
     return {
-      tools: [
+      content: [
         {
-          name: "add_todo",
-          description: "Add a new todo item",
-          inputSchema: {
-            type: "object",
-            properties: {
-              text: {
-                type: "string",
-                description: "The text of the todo item",
-              },
-            },
-            required: ["text"],
-          },
-        },
-        {
-          name: "list_todos",
-          description: "List all todo items",
-          inputSchema: {
-            type: "object",
-            properties: {},
-          },
-        },
-        {
-          name: "complete_todo",
-          description: "Mark a todo item as completed",
-          inputSchema: {
-            type: "object",
-            properties: {
-              id: {
-                type: "string",
-                description: "The ID of the todo to complete",
-              },
-            },
-            required: ["id"],
-          },
+          type: "text",
+          text: todoList || "No todos found",
         },
       ],
     };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params as {
-      name: string;
-      arguments: any;
-    };
-
-    switch (name) {
-      case "add_todo": {
-        const { text } = args as { text: string };
-        const todo: Todo = {
-          id: String(nextId++),
-          text,
-          completed: false,
-        };
-        todos.push(todo);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Added todo: "${text}" with ID ${todo.id}`,
-            },
-          ],
-        };
+  server.tool(
+    "complete_todo",
+    "Mark a todo item as completed",
+    {
+      id: z.string().describe("The ID of the todo to complete"),
+    },
+    async (args) => {
+      const todo = todos.find((t) => t.id === args.id);
+      if (!todo) {
+        throw new Error(`Todo with ID ${args.id} not found`);
       }
-
-      case "list_todos": {
-        const todoList = todos
-          .map(
-            (todo) => `${todo.id}: ${todo.text} ${todo.completed ? "✓" : "○"}`,
-          )
-          .join("\n");
-        return {
-          content: [
-            {
-              type: "text",
-              text: todoList || "No todos found",
-            },
-          ],
-        };
-      }
-
-      case "complete_todo": {
-        const { id } = args as { id: string };
-        const todo = todos.find((t) => t.id === id);
-        if (!todo) {
-          throw new Error(`Todo with ID ${id} not found`);
-        }
-        todo.completed = true;
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Completed todo: "${todo.text}"`,
-            },
-          ],
-        };
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
-  });
+      todo.completed = true;
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Completed todo: "${todo.text}"`,
+          },
+        ],
+      };
+    },
+  );
 
   // Create client instance
   const client = new Client(
@@ -178,7 +118,7 @@ export async function setupTestServerAndClient() {
 
   await Promise.all([
     client.connect(clientTransport),
-    server.connect(serverTransport),
+    server.server.connect(serverTransport),
   ]);
 
   // Return everything you need

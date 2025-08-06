@@ -447,7 +447,7 @@ describe("Report Missing Tool", () => {
       expect(identifyEvent?.resourceName).toBe("get_more_tools");
 
       // Verify user identity was stored
-      const data = getServerTrackingData(server);
+      const data = getServerTrackingData(server.server);
       const sessionId = data?.sessionId;
       const storedIdentity = data?.identifiedSessions.get(sessionId!);
 

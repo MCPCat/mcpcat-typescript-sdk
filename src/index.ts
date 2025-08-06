@@ -2,17 +2,22 @@
 import {
   MCPCatOptions,
   MCPCatData,
-  MCPServerLike,
   UserIdentity,
+  MCPServerLike,
+  HighLevelMCPServerLike,
 } from "./types.js";
 
 // Import from modules
-import { isCompatibleServerType } from "./modules/compatibility.js";
+import {
+  isCompatibleServerType,
+  isHighLevelServer,
+} from "./modules/compatibility.js";
 import { writeToLog } from "./modules/logging.js";
 import { setupMCPCatTools } from "./modules/tools.js";
 import { setupToolCallTracing } from "./modules/tracing.js";
 import { getSessionInfo, newSessionId } from "./modules/session.js";
 import { setServerTrackingData } from "./modules/internal.js";
+import { setupTracking } from "./modules/tracingV2.js";
 
 /**
  * Integrates MCPCat analytics into an MCP server to track tool usage patterns and user interactions.
@@ -80,10 +85,16 @@ function track(
   server: any,
   projectId: string,
   options: MCPCatOptions = {},
-): MCPServerLike {
+): any {
   try {
     const validatedServer = isCompatibleServerType(server);
-    const sessionInfo = getSessionInfo(validatedServer, undefined);
+    // For high-level servers, we need to pass the underlying server to some functions
+    const lowLevelServer = (
+      isHighLevelServer(validatedServer)
+        ? (validatedServer as any).server
+        : validatedServer
+    ) as MCPServerLike;
+    const sessionInfo = getSessionInfo(lowLevelServer, undefined);
     const mcpcatData: MCPCatData = {
       projectId,
       sessionId: newSessionId(),
@@ -99,11 +110,15 @@ function track(
       },
     };
 
-    setServerTrackingData(validatedServer, mcpcatData);
+    setServerTrackingData(lowLevelServer, mcpcatData);
+    if (isHighLevelServer(validatedServer)) {
+      const highLevelServer = validatedServer as HighLevelMCPServerLike;
+      setupTracking(highLevelServer);
+    }
 
     if (mcpcatData.options.enableReportMissing) {
       try {
-        setupMCPCatTools(validatedServer);
+        setupMCPCatTools(lowLevelServer);
       } catch (error) {
         writeToLog(`Warning: Failed to setup report missing tool - ${error}`);
       }
@@ -111,7 +126,8 @@ function track(
 
     if (mcpcatData.options.enableTracing) {
       try {
-        setupToolCallTracing(validatedServer);
+        // Pass the low-level server to the current tracing module
+        setupToolCallTracing(lowLevelServer);
       } catch (error) {
         writeToLog(`Warning: Failed to setup tool call tracing - ${error}`);
       }
@@ -120,7 +136,7 @@ function track(
     return validatedServer;
   } catch (error) {
     writeToLog(`Warning: Failed to track server - ${error}`);
-    return server as MCPServerLike;
+    return server;
   }
 }
 

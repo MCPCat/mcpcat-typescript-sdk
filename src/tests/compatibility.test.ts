@@ -297,10 +297,12 @@ describe("Compatibility Module", () => {
         // Other McpServer properties
         requestContext: {},
         toolCallId: "test-id",
+        _registeredTools: {},
+        tool: () => {},
       };
 
       const result = isCompatibleServerType(mcpServerWrapper);
-      expect(result).toBe(underlyingServer);
+      expect(result).toBe(mcpServerWrapper);
       expect(writeToLog).not.toHaveBeenCalled();
     });
 
@@ -314,6 +316,8 @@ describe("Compatibility Module", () => {
 
       const mcpServerWrapper = {
         server: invalidUnderlyingServer,
+        _registeredTools: {},
+        tool: () => {},
       };
 
       expect(() => isCompatibleServerType(mcpServerWrapper)).toThrow(
@@ -388,7 +392,11 @@ describe("Compatibility Module", () => {
 
       testCases.forEach((testCase) => {
         vi.clearAllMocks();
-        const mcpServerWrapper = { server: testCase.server };
+        const mcpServerWrapper = {
+          server: testCase.server,
+          _registeredTools: {},
+          tool: () => {},
+        };
 
         expect(() => isCompatibleServerType(mcpServerWrapper)).toThrow(
           testCase.expectedError,
@@ -448,10 +456,8 @@ describe("Compatibility Module", () => {
       const result = isCompatibleServerType(mcpServer);
 
       // Should return the underlying server
-      expect(result).toBe(mcpServer.server);
+      expect(result).toBe(mcpServer);
       expect(result).toBeDefined();
-      expect(typeof result.setRequestHandler).toBe("function");
-      expect(result._requestHandlers).toBeInstanceOf(Map);
       // Note: _serverInfo exists but may be private - our compatibility check should handle this
     });
 

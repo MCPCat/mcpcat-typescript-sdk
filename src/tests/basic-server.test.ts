@@ -7,6 +7,7 @@ import {
   ListToolsResultSchema,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 
 describe("Basic Server Test", () => {
   it("should be able to call tools without tracking", async () => {
@@ -52,8 +53,9 @@ describe("Basic Server Test", () => {
     const { server, cleanup } = await setupTestServerAndClient();
 
     try {
-      // Access _serverInfo even though it might be private
-      const serverInfo = (server as any)._serverInfo;
+      // McpServer stores server info in the underlying server.server property
+      const underlyingServer = (server as any).server || server;
+      const serverInfo = (underlyingServer as any)._serverInfo;
 
       expect(serverInfo).toBeDefined();
       expect(serverInfo.name).toBe("test server");
@@ -115,9 +117,89 @@ describe("Basic Server Test", () => {
       expect(result).toBe(server);
 
       // Verify we can still access server info after compatibility check
-      const serverInfo = (result as any)._serverInfo;
+      // McpServer stores server info in the underlying server.server property
+      const underlyingServer = (result as any).server || result;
+      const serverInfo = (underlyingServer as any)._serverInfo;
       expect(serverInfo).toBeDefined();
       expect(serverInfo.name).toBe("test server");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("should properly trace tools added after track() is called", async () => {
+    resetTodos();
+    const { server, client, cleanup } = await setupTestServerAndClient();
+
+    try {
+      // Import track function
+      const { track } = await import("../index.js");
+
+      // Call track first with a project ID
+      await track(server, "test-project", {
+        enableToolCallContext: true,
+        enableTracing: true,
+      });
+
+      // Add a new tool after track() has been called using server.tool()
+      server.tool(
+        "new_tool_after_track",
+        "A tool added after track() was called",
+        {
+          data: z.string().optional().describe("Optional data parameter"),
+        },
+        async (args) => {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `New tool called with data: ${args.data || "no data"}`,
+              },
+            ],
+          };
+        },
+      );
+
+      // List tools to verify the new tool appears with context parameter
+      const toolsResponse = await client.request(
+        {
+          method: "tools/list",
+          params: {},
+        },
+        ListToolsResultSchema,
+      );
+
+      const newTool = toolsResponse.tools.find(
+        (t) => t.name === "new_tool_after_track",
+      );
+      expect(newTool).toBeDefined();
+      expect(newTool?.inputSchema).toBeDefined();
+
+      // Verify that the context parameter was injected
+      const inputSchema = newTool?.inputSchema as any;
+      expect(inputSchema.properties?.context).toBeDefined();
+      expect(inputSchema.properties?.context.type).toBe("string");
+
+      // Verify the original data parameter is still there
+      expect(inputSchema.properties?.data).toBeDefined();
+
+      // Call the new tool with context to verify it works
+      const result = await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "new_tool_after_track",
+            arguments: {
+              context: "Testing new tool after track",
+              data: "test data",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      expect(result).toBeDefined();
+      expect(result.content[0].text).toContain("test data");
     } finally {
       await cleanup();
     }

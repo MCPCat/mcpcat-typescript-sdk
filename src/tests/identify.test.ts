@@ -8,11 +8,12 @@ import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types";
 import { EventCapture } from "./test-utils";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { getServerTrackingData } from "../modules/internal";
-import { UserIdentity } from "../types";
+import { HighLevelMCPServerLike, UserIdentity } from "../types";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 
 describe("Identify Feature", () => {
-  let server: any;
+  let server: HighLevelMCPServerLike;
   let client: any;
   let cleanup: () => Promise<void>;
 
@@ -84,7 +85,7 @@ describe("Identify Feature", () => {
       expect(identifyEvent?.resourceName).toBe("add_todo");
 
       // Verify user identity is stored in session
-      const data = getServerTrackingData(server);
+      const data = getServerTrackingData(server.server);
       const sessionId = data?.sessionId;
       expect(sessionId).toBeDefined();
 
@@ -160,6 +161,110 @@ describe("Identify Feature", () => {
 
       expect(identifyCallCount).toBe(1); // Still 1
     });
+
+    it("should properly identify when calling tools added after track()", async () => {
+      const eventCapture = new EventCapture();
+      await eventCapture.start();
+
+      let identifyCalled = false;
+      const testUserId = `post-track-user-${randomUUID()}`;
+      const testUserData = {
+        name: `Post Track User ${randomUUID()}`,
+        email: `post-track-${randomUUID()}@example.com`,
+      };
+
+      // Enable tracking with identify function FIRST
+      track(server, "test-project", {
+        enableTracing: true,
+        enableToolCallContext: true,
+        identify: async (request, extra) => {
+          identifyCalled = true;
+          expect(request).toBeDefined();
+          expect(extra).toBeDefined();
+          return {
+            userId: testUserId,
+            userData: testUserData,
+          };
+        },
+      });
+
+      // Add a new tool AFTER track() has been called
+      server.tool(
+        "post_track_tool",
+        "A tool added after tracking was enabled",
+        {
+          message: z.string().describe("A message to process"),
+        },
+        async (args) => {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Processed message: ${args.message}`,
+              },
+            ],
+          };
+        },
+      );
+
+      // Call the newly added tool - this should trigger identify
+      const result = await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "post_track_tool",
+            arguments: {
+              message: "Testing post-track identification",
+              context:
+                "Verifying identification works for dynamically added tools",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      expect(result.content[0].text).toContain(
+        "Processed message: Testing post-track identification",
+      );
+      expect(identifyCalled).toBe(true);
+
+      // Wait for events to be processed
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Verify that an identify event was published
+      const events = eventCapture.getEvents();
+      const identifyEvent = events.find(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpcatIdentify,
+      );
+
+      expect(identifyEvent).toBeDefined();
+      expect(identifyEvent?.resourceName).toBe("post_track_tool");
+
+      // Verify tool call event was tracked with user intent
+      const toolCallEvent = events.find(
+        (e) =>
+          e.eventType === PublishEventRequestEventTypeEnum.mcpToolsCall &&
+          e.resourceName === "post_track_tool",
+      );
+
+      expect(toolCallEvent).toBeDefined();
+      expect(toolCallEvent?.userIntent).toBe(
+        "Verifying identification works for dynamically added tools",
+      );
+
+      // Verify user identity is stored in session
+      const data = getServerTrackingData(server.server);
+      const sessionId = data?.sessionId;
+      expect(sessionId).toBeDefined();
+
+      const storedIdentity = data?.identifiedSessions.get(sessionId!);
+      expect(storedIdentity).toEqual({
+        userId: testUserId,
+        userData: testUserData,
+      });
+
+      await eventCapture.stop();
+    });
   });
 
   describe("User Data Persistence Across Tool Calls", () => {
@@ -232,7 +337,7 @@ describe("Identify Feature", () => {
       expect(new Set(sessionIds).size).toBe(1); // All should have same session ID
 
       // Verify user identity persists
-      const data = getServerTrackingData(server);
+      const data = getServerTrackingData(server.server);
       const sessionId = data?.sessionId;
       const storedIdentity = data?.identifiedSessions.get(sessionId!);
 
@@ -282,7 +387,7 @@ describe("Identify Feature", () => {
       expect(identifyEvent).toBeUndefined();
 
       // Verify no user identity is stored
-      const data = getServerTrackingData(server);
+      const data = getServerTrackingData(server.server);
       const sessionId = data?.sessionId;
       const storedIdentity = data?.identifiedSessions.get(sessionId!);
 
@@ -380,7 +485,7 @@ describe("Identify Feature", () => {
       );
 
       // Get session info from server data
-      const data = getServerTrackingData(server);
+      const data = getServerTrackingData(server.server);
       const sessionInfo = data?.sessionInfo;
 
       expect(sessionInfo).toBeDefined();
@@ -432,7 +537,7 @@ describe("Identify Feature", () => {
       expect(toolCallEvent).toBeDefined();
       // The event should have access to session info through the server's session data
 
-      const data = getServerTrackingData(server);
+      const data = getServerTrackingData(server.server);
       expect(data?.sessionInfo.identifyActorGivenId).toBe(testUserId);
       expect(data?.sessionInfo.identifyActorName).toBe(testUserData.name);
       expect(data?.sessionInfo.identifyActorData).toEqual(testUserData);
@@ -539,7 +644,7 @@ describe("Identify Feature", () => {
       expect(identifyEvent?.duration).toBeDefined();
 
       // Verify no user identity was stored
-      const data = getServerTrackingData(server);
+      const data = getServerTrackingData(server.server);
       const sessionId = data?.sessionId;
       const storedIdentity = data?.identifiedSessions.get(sessionId!);
 
@@ -579,7 +684,7 @@ describe("Identify Feature", () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       // The system should handle this gracefully
-      const data = getServerTrackingData(server);
+      const data = getServerTrackingData(server.server);
       const sessionId = data?.sessionId;
       const storedIdentity = data?.identifiedSessions.get(sessionId!);
 

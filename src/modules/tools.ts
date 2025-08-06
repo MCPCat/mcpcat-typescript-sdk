@@ -20,7 +20,7 @@ export async function handleReportMissing(args: {
   return {
     content: [
       {
-        type: "text",
+        type: "text" as const,
         text: `Unfortunately, we have shown you the full tool list. We have noted your feedback and will work to improve the tool list in the future.`,
       },
     ],
