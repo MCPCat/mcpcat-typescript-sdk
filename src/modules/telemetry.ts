@@ -28,8 +28,6 @@ export class TelemetryManager {
     config: ExporterConfig,
   ): Exporter | null {
     switch (config.type) {
-      case "console":
-        return new ConsoleExporter();
       case "otlp":
         return new OTLPExporter(config as any);
       case "datadog":
@@ -45,22 +43,17 @@ export class TelemetryManager {
   async export(event: Event): Promise<void> {
     if (this.exporters.size === 0) return;
 
-    // Fire-and-forget pattern for each exporter
+    // Telemetry errors should be logged but not propagated
     for (const [name, exporter] of this.exporters) {
       exporter.export(event).catch((error) => {
-        writeToLog(`Telemetry export failed for ${name}: ${error}`);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        writeToLog(`Telemetry export failed for ${name}: ${errorMessage}`);
       });
     }
   }
 
   getExporterCount(): number {
     return this.exporters.size;
-  }
-}
-
-// Simple console exporter for testing
-class ConsoleExporter implements Exporter {
-  async export(event: Event): Promise<void> {
-    console.error("[MCPCat Telemetry]", JSON.stringify(event, null, 2));
   }
 }

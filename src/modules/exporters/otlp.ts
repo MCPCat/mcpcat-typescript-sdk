@@ -158,10 +158,26 @@ export class OTLPExporter implements Exporter {
   }
 
   private randomHex(length: number): string {
-    let result = "";
-    for (let i = 0; i < length; i++) {
-      result += Math.floor(Math.random() * 16).toString(16);
+    // Use crypto for better randomness and performance
+    const bytes = new Uint8Array(Math.ceil(length / 2));
+
+    // Use crypto.getRandomValues for browser compatibility
+    // or crypto.randomBytes in Node.js
+    if (
+      typeof globalThis.crypto !== "undefined" &&
+      globalThis.crypto.getRandomValues
+    ) {
+      globalThis.crypto.getRandomValues(bytes);
+    } else {
+      // Fallback to Node.js crypto module
+      const crypto = require("crypto");
+      const buffer = crypto.randomBytes(Math.ceil(length / 2));
+      bytes.set(buffer);
     }
-    return result;
+
+    return Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, length);
   }
 }

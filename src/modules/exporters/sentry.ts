@@ -6,6 +6,7 @@ export interface SentryExporterConfig {
   dsn: string;
   environment?: string;
   release?: string;
+  enableTracing?: boolean; // Default: false (logs/errors only)
 }
 
 interface ParsedDSN {
@@ -43,6 +44,46 @@ interface SentryTransaction {
   }>;
   tags?: Record<string, string>;
   extra?: Record<string, any>;
+}
+
+interface SentryErrorEvent {
+  type: "event";
+  event_id: string;
+  timestamp: number;
+  level: "error" | "fatal" | "warning";
+  exception: {
+    values: Array<{
+      type: string;
+      value: string;
+      mechanism?: {
+        type: string;
+        handled: boolean;
+      };
+    }>;
+  };
+  contexts?: {
+    trace?: {
+      trace_id: string;
+      span_id: string;
+      parent_span_id?: string;
+      op?: string;
+    };
+    [key: string]: any;
+  };
+  tags?: Record<string, string>;
+  extra?: Record<string, any>;
+  transaction?: string;
+}
+
+interface SentryLog {
+  timestamp: number;
+  trace_id: string;
+  level: "info" | "error";
+  body: string;
+  attributes?: Record<
+    string,
+    { value: any; type: "string" | "boolean" | "integer" | "double" }
+  >;
 }
 
 export class SentryExporter implements Exporter {
@@ -87,33 +128,198 @@ export class SentryExporter implements Exporter {
 
   async export(event: Event): Promise<void> {
     try {
-      const transaction = this.eventToTransaction(event);
-      const envelope = this.createEnvelope(transaction);
+      // ALWAYS send log
+      const log = this.eventToLog(event);
+      const logEnvelope = this.createLogEnvelope(log);
 
-      writeToLog(
-        `SentryExporter: Sending transaction ${transaction.event_id} to Sentry`,
-      );
+      writeToLog(`SentryExporter: Sending log for event ${event.id} to Sentry`);
 
-      const response = await fetch(this.endpoint, {
+      const logResponse = await fetch(this.endpoint, {
         method: "POST",
         headers: {
           "X-Sentry-Auth": this.authHeader,
           "Content-Type": "application/x-sentry-envelope",
         },
-        body: envelope,
+        body: logEnvelope,
       });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
+      if (!logResponse.ok) {
+        const errorBody = await logResponse.text();
         writeToLog(
-          `Sentry export failed - Status: ${response.status}, Body: ${errorBody}`,
+          `Sentry log export failed - Status: ${logResponse.status}, Body: ${errorBody}`,
         );
       } else {
-        writeToLog(`Sentry export success - Event: ${event.id}`);
+        writeToLog(`Sentry log export success - Event: ${event.id}`);
+      }
+
+      // OPTIONALLY send transaction for performance monitoring
+      if (this.config.enableTracing) {
+        const transaction = this.eventToTransaction(event);
+        const transactionEnvelope = this.createTransactionEnvelope(transaction);
+
+        writeToLog(
+          `SentryExporter: Sending transaction ${transaction.event_id} to Sentry`,
+        );
+
+        const transactionResponse = await fetch(this.endpoint, {
+          method: "POST",
+          headers: {
+            "X-Sentry-Auth": this.authHeader,
+            "Content-Type": "application/x-sentry-envelope",
+          },
+          body: transactionEnvelope,
+        });
+
+        if (!transactionResponse.ok) {
+          const errorBody = await transactionResponse.text();
+          writeToLog(
+            `Sentry transaction export failed - Status: ${transactionResponse.status}, Body: ${errorBody}`,
+          );
+        } else {
+          writeToLog(`Sentry transaction export success - Event: ${event.id}`);
+        }
+      }
+
+      // ALWAYS send error event for Issue creation if this is an error
+      if (event.isError) {
+        // Use transaction if available for better context, otherwise create minimal error event
+        const errorEvent = this.config.enableTracing
+          ? this.eventToErrorEvent(event, this.eventToTransaction(event))
+          : this.eventToErrorEvent(event);
+        const errorEnvelope = this.createErrorEnvelope(errorEvent);
+
+        writeToLog(
+          `SentryExporter: Sending error event ${errorEvent.event_id} to Sentry for Issue creation`,
+        );
+
+        const errorResponse = await fetch(this.endpoint, {
+          method: "POST",
+          headers: {
+            "X-Sentry-Auth": this.authHeader,
+            "Content-Type": "application/x-sentry-envelope",
+          },
+          body: errorEnvelope,
+        });
+
+        if (!errorResponse.ok) {
+          const errorBody = await errorResponse.text();
+          writeToLog(
+            `Sentry error export failed - Status: ${errorResponse.status}, Body: ${errorBody}`,
+          );
+        } else {
+          writeToLog(`Sentry error export success - Event: ${event.id}`);
+        }
       }
     } catch (error) {
       writeToLog(`Sentry export error: ${error}`);
     }
+  }
+
+  private eventToLog(event: Event): SentryLog {
+    const timestamp = event.timestamp
+      ? new Date(event.timestamp).getTime() / 1000
+      : Date.now() / 1000;
+
+    const traceId = this.generateTraceId(event.sessionId);
+
+    // Build message
+    const message = event.resourceName
+      ? `MCP ${event.eventType || "event"}: ${event.resourceName}`
+      : `MCP ${event.eventType || "event"}`;
+
+    return {
+      timestamp,
+      trace_id: traceId,
+      level: event.isError ? "error" : "info",
+      body: message,
+      attributes: this.buildLogAttributes(event),
+    };
+  }
+
+  private buildLogAttributes(
+    event: Event,
+  ): Record<
+    string,
+    { value: any; type: "string" | "boolean" | "integer" | "double" }
+  > {
+    const attributes: Record<
+      string,
+      { value: any; type: "string" | "boolean" | "integer" | "double" }
+    > = {};
+
+    if (event.eventType) {
+      attributes.eventType = { value: event.eventType, type: "string" };
+    }
+    if (event.resourceName) {
+      attributes.resourceName = { value: event.resourceName, type: "string" };
+    }
+    if (event.serverName) {
+      attributes.serverName = { value: event.serverName, type: "string" };
+    }
+    if (event.clientName) {
+      attributes.clientName = { value: event.clientName, type: "string" };
+    }
+    if (event.sessionId) {
+      attributes.sessionId = { value: event.sessionId, type: "string" };
+    }
+    if (event.projectId) {
+      attributes.projectId = { value: event.projectId, type: "string" };
+    }
+    if (event.duration !== undefined) {
+      attributes.duration_ms = { value: event.duration, type: "double" };
+    }
+    if (event.identifyActorGivenId) {
+      attributes.actorId = {
+        value: event.identifyActorGivenId,
+        type: "string",
+      };
+    }
+    if (event.identifyActorName) {
+      attributes.actorName = { value: event.identifyActorName, type: "string" };
+    }
+    if (event.userIntent) {
+      attributes.userIntent = { value: event.userIntent, type: "string" };
+    }
+    if (event.serverVersion) {
+      attributes.serverVersion = { value: event.serverVersion, type: "string" };
+    }
+    if (event.clientVersion) {
+      attributes.clientVersion = { value: event.clientVersion, type: "string" };
+    }
+    if (event.isError !== undefined) {
+      attributes.isError = { value: event.isError, type: "boolean" };
+    }
+
+    return attributes;
+  }
+
+  private createLogEnvelope(log: SentryLog): string {
+    // Envelope header
+    const envelopeHeader = {
+      event_id: this.generateEventId(),
+      sent_at: new Date().toISOString(),
+    };
+
+    // Item header with ALL MANDATORY fields
+    const itemHeader = {
+      type: "log",
+      item_count: 1, // MANDATORY - must match number of logs
+      content_type: "application/vnd.sentry.items.log+json", // MANDATORY - exact string
+    };
+
+    // Payload with CORRECT key
+    const payload = {
+      items: [log], // Changed from 'logs' to 'items'
+    };
+
+    // Build envelope with TRAILING NEWLINE
+    return (
+      [
+        JSON.stringify(envelopeHeader),
+        JSON.stringify(itemHeader),
+        JSON.stringify(payload),
+      ].join("\n") + "\n"
+    ); // Added required trailing newline
   }
 
   private eventToTransaction(event: Event): SentryTransaction {
@@ -184,7 +390,87 @@ export class SentryExporter implements Exporter {
     return extra;
   }
 
-  private createEnvelope(transaction: SentryTransaction): string {
+  private eventToErrorEvent(
+    event: Event,
+    transaction?: SentryTransaction,
+  ): SentryErrorEvent {
+    // Extract error message
+    let errorMessage = "Unknown error";
+    let errorType = "ToolCallError";
+
+    if (event.error) {
+      if (typeof event.error === "string") {
+        errorMessage = event.error;
+      } else if (typeof event.error === "object" && event.error !== null) {
+        if ("message" in event.error) {
+          errorMessage = String(event.error.message);
+        } else if ("error" in event.error) {
+          errorMessage = String(event.error.error);
+        } else {
+          errorMessage = JSON.stringify(event.error);
+        }
+        if ("type" in event.error) {
+          errorType = String(event.error.type);
+        }
+      }
+    }
+
+    // Use same trace context as the transaction for correlation (if available)
+    const traceId = transaction
+      ? transaction.contexts.trace.trace_id
+      : this.generateTraceId(event.sessionId);
+    const spanId = this.generateSpanId(event.id + "_error");
+
+    const timestamp = transaction
+      ? transaction.timestamp
+      : event.timestamp
+        ? new Date(event.timestamp).getTime() / 1000
+        : Date.now() / 1000;
+
+    const errorEvent: SentryErrorEvent = {
+      type: "event",
+      event_id: this.generateEventId(event.id + "_error"),
+      timestamp,
+      level: "error",
+      exception: {
+        values: [
+          {
+            type: errorType,
+            value: errorMessage,
+            mechanism: {
+              type: "mcp_tool_call",
+              handled: false,
+            },
+          },
+        ],
+      },
+      contexts: {
+        trace: {
+          trace_id: traceId, // Same trace ID as transaction/log for correlation
+          span_id: spanId,
+          parent_span_id: transaction?.contexts.trace.span_id, // Link to transaction span if available
+          op: transaction?.contexts.trace.op || event.eventType || "mcp.event",
+        },
+        mcp: {
+          tool_name: event.resourceName,
+          session_id: event.sessionId,
+          event_type: event.eventType,
+          user_intent: event.userIntent,
+        },
+      },
+      tags: this.buildTags(event),
+      extra: this.buildExtra(event),
+      transaction:
+        transaction?.transaction ||
+        (event.resourceName
+          ? `${event.eventType || "mcp"} - ${event.resourceName}`
+          : event.eventType || "mcp.event"), // Generate transaction name if not available
+    };
+
+    return errorEvent;
+  }
+
+  private createTransactionEnvelope(transaction: SentryTransaction): string {
     // Envelope header
     const envelopeHeader = {
       event_id: transaction.event_id,
@@ -202,6 +488,32 @@ export class SentryExporter implements Exporter {
       JSON.stringify(itemHeader),
       JSON.stringify(transaction),
     ].join("\n");
+  }
+
+  private createErrorEnvelope(errorEvent: SentryErrorEvent): string {
+    // Envelope header
+    const envelopeHeader = {
+      event_id: errorEvent.event_id,
+      sent_at: new Date().toISOString(),
+    };
+
+    // Item header for error event
+    const itemHeader = {
+      type: "event",
+      content_type: "application/json",
+    };
+
+    // Build envelope (newline-separated JSON)
+    return [
+      JSON.stringify(envelopeHeader),
+      JSON.stringify(itemHeader),
+      JSON.stringify(errorEvent),
+    ].join("\n");
+  }
+
+  // Keep old method for backward compatibility (deprecated)
+  private createEnvelope(transaction: SentryTransaction): string {
+    return this.createTransactionEnvelope(transaction);
   }
 
   private generateEventId(eventId?: string): string {

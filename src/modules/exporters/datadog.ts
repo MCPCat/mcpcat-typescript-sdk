@@ -15,6 +15,10 @@ interface DatadogLog {
   ddsource: string;
   ddtags: string;
   timestamp: number;
+  status?: string;
+  error?: {
+    message: string;
+  };
   mcp: {
     session_id?: string;
     event_id?: string;
@@ -132,12 +136,13 @@ export class DatadogExporter implements Exporter {
     if (event.resourceName) tags.push(`resource:${event.resourceName}`);
     if (event.isError) tags.push("error:true");
 
-    return {
+    const log: DatadogLog = {
       message: `${event.eventType || "unknown"} - ${event.resourceName || "unknown"}`,
       service: this.config.service,
       ddsource: "mcpcat",
       ddtags: tags.join(","),
       timestamp: event.timestamp ? event.timestamp.getTime() : Date.now(),
+      status: event.isError ? "error" : "info",
       mcp: {
         session_id: event.sessionId,
         event_id: event.id,
@@ -155,6 +160,18 @@ export class DatadogExporter implements Exporter {
         error: event.error,
       },
     };
+
+    // Add error at root level if it exists
+    if (event.isError && event.error) {
+      log.error = {
+        message:
+          typeof event.error === "string"
+            ? event.error
+            : JSON.stringify(event.error),
+      };
+    }
+
+    return log;
   }
 
   private eventToMetrics(event: Event): DatadogMetric[] {
