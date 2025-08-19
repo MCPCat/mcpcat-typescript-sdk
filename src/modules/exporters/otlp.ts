@@ -4,7 +4,7 @@ import { traceContext } from "./trace-context.js";
 
 export interface OTLPExporterConfig {
   type: "otlp";
-  endpoint?: string;
+  endpoint: string;
   protocol?: "http/protobuf" | "grpc";
   headers?: Record<string, string>;
   compression?: "gzip" | "none";
@@ -18,11 +18,7 @@ export class OTLPExporter implements Exporter {
   constructor(config: OTLPExporterConfig) {
     // Default to HTTP protocol on localhost
     this.protocol = config.protocol || "http/protobuf";
-    this.endpoint =
-      config.endpoint ||
-      (this.protocol === "grpc"
-        ? "http://localhost:4317"
-        : "http://localhost:4318/v1/traces");
+    this.endpoint = config.endpoint;
     this.headers = {
       "Content-Type": "application/json", // Using JSON for now for easier debugging
       ...config.headers,
@@ -54,7 +50,7 @@ export class OTLPExporter implements Exporter {
               {
                 scope: {
                   name: "mcpcat",
-                  version: event.mcpcatVersion || "0.1.0",
+                  version: event.mcpcatVersion || "unknown",
                 },
                 spans: [span],
               },
