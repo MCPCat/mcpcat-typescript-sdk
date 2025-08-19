@@ -1,5 +1,6 @@
 import { Event, Exporter } from "../../types.js";
 import { writeToLog } from "../logging.js";
+import { traceContext } from "./trace-context.js";
 
 export interface DatadogExporterConfig {
   type: "datadog";
@@ -16,6 +17,10 @@ interface DatadogLog {
   ddtags: string;
   timestamp: number;
   status?: string;
+  dd?: {
+    trace_id: string;
+    span_id: string;
+  };
   error?: {
     message: string;
   };
@@ -143,6 +148,10 @@ export class DatadogExporter implements Exporter {
       ddtags: tags.join(","),
       timestamp: event.timestamp ? event.timestamp.getTime() : Date.now(),
       status: event.isError ? "error" : "info",
+      dd: {
+        trace_id: traceContext.getTraceId(event.sessionId),
+        span_id: traceContext.generateSpanId(),
+      },
       mcp: {
         session_id: event.sessionId,
         event_id: event.id,

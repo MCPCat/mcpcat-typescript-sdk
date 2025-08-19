@@ -1,5 +1,6 @@
 import { Event, Exporter } from "../../types.js";
 import { writeToLog } from "../logging.js";
+import { traceContext } from "./trace-context.js";
 
 export interface OTLPExporterConfig {
   type: "otlp";
@@ -94,8 +95,8 @@ export class OTLPExporter implements Exporter {
       : startTimeNanos;
 
     return {
-      traceId: this.generateTraceId(event.sessionId),
-      spanId: this.generateSpanId(event.id),
+      traceId: traceContext.getTraceId(event.sessionId),
+      spanId: traceContext.generateSpanId(),
       name: event.eventType || "mcp.event",
       kind: 2, // SPAN_KIND_SERVER
       startTimeUnixNano: startTimeNanos.toString(),
@@ -118,8 +119,16 @@ export class OTLPExporter implements Exporter {
           value: { stringValue: event.resourceName || "" },
         },
         {
+          key: "mcp.user_intent",
+          value: { stringValue: event.userIntent || "" },
+        },
+        {
           key: "mcp.actor_id",
-          value: { stringValue: event.identifyActorGivenId || "anonymous" },
+          value: { stringValue: event.identifyActorGivenId || "" },
+        },
+        {
+          key: "mcp.actor_name",
+          value: { stringValue: event.identifyActorName || "" },
         },
         {
           key: "mcp.client_name",
@@ -134,50 +143,5 @@ export class OTLPExporter implements Exporter {
         code: event.isError ? 2 : 1, // ERROR : OK
       },
     };
-  }
-
-  private generateTraceId(sessionId?: string): string {
-    // Generate a 32-character hex string (128 bits)
-    if (sessionId) {
-      // Use session ID as base for consistent trace grouping
-      return this.padHex(sessionId.replace(/[^a-f0-9]/gi, ""), 32);
-    }
-    return this.randomHex(32);
-  }
-
-  private generateSpanId(eventId?: string): string {
-    // Generate a 16-character hex string (64 bits)
-    if (eventId) {
-      return this.padHex(eventId.replace(/[^a-f0-9]/gi, ""), 16);
-    }
-    return this.randomHex(16);
-  }
-
-  private padHex(str: string, length: number): string {
-    return str.padStart(length, "0").slice(-length);
-  }
-
-  private randomHex(length: number): string {
-    // Use crypto for better randomness and performance
-    const bytes = new Uint8Array(Math.ceil(length / 2));
-
-    // Use crypto.getRandomValues for browser compatibility
-    // or crypto.randomBytes in Node.js
-    if (
-      typeof globalThis.crypto !== "undefined" &&
-      globalThis.crypto.getRandomValues
-    ) {
-      globalThis.crypto.getRandomValues(bytes);
-    } else {
-      // Fallback to Node.js crypto module
-      const crypto = require("crypto");
-      const buffer = crypto.randomBytes(Math.ceil(length / 2));
-      bytes.set(buffer);
-    }
-
-    return Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-      .slice(0, length);
   }
 }

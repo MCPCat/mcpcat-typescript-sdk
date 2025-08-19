@@ -1,5 +1,6 @@
 import { Event, Exporter } from "../../types.js";
 import { writeToLog } from "../logging.js";
+import { traceContext } from "./trace-context.js";
 
 export interface SentryExporterConfig {
   type: "sentry";
@@ -220,7 +221,7 @@ export class SentryExporter implements Exporter {
       ? new Date(event.timestamp).getTime() / 1000
       : Date.now() / 1000;
 
-    const traceId = this.generateTraceId(event.sessionId);
+    const traceId = traceContext.getTraceId(event.sessionId);
 
     // Build message
     const message = event.resourceName
@@ -296,7 +297,7 @@ export class SentryExporter implements Exporter {
   private createLogEnvelope(log: SentryLog): string {
     // Envelope header
     const envelopeHeader = {
-      event_id: this.generateEventId(),
+      event_id: traceContext.generateSpanId() + traceContext.generateSpanId(),
       sent_at: new Date().toISOString(),
     };
 
@@ -332,8 +333,8 @@ export class SentryExporter implements Exporter {
       ? endTimestamp - event.duration / 1000
       : endTimestamp;
 
-    const traceId = this.generateTraceId(event.sessionId);
-    const spanId = this.generateSpanId(event.id);
+    const traceId = traceContext.getTraceId(event.sessionId);
+    const spanId = traceContext.generateSpanId();
 
     // Build transaction name
     const transactionName = event.resourceName
@@ -342,7 +343,7 @@ export class SentryExporter implements Exporter {
 
     const transaction: SentryTransaction = {
       type: "transaction",
-      event_id: this.generateEventId(event.id),
+      event_id: traceContext.generateSpanId() + traceContext.generateSpanId(),
       timestamp: endTimestamp,
       start_timestamp: startTimestamp,
       transaction: transactionName,
@@ -418,8 +419,8 @@ export class SentryExporter implements Exporter {
     // Use same trace context as the transaction for correlation (if available)
     const traceId = transaction
       ? transaction.contexts.trace.trace_id
-      : this.generateTraceId(event.sessionId);
-    const spanId = this.generateSpanId(event.id + "_error");
+      : traceContext.getTraceId(event.sessionId);
+    const spanId = traceContext.generateSpanId();
 
     const timestamp = transaction
       ? transaction.timestamp
@@ -429,7 +430,7 @@ export class SentryExporter implements Exporter {
 
     const errorEvent: SentryErrorEvent = {
       type: "event",
-      event_id: this.generateEventId(event.id + "_error"),
+      event_id: traceContext.generateSpanId() + traceContext.generateSpanId(),
       timestamp,
       level: "error",
       exception: {
@@ -452,7 +453,7 @@ export class SentryExporter implements Exporter {
           op: transaction?.contexts.trace.op || event.eventType || "mcp.event",
         },
         mcp: {
-          tool_name: event.resourceName,
+          resource_name: event.resourceName,
           session_id: event.sessionId,
           event_type: event.eventType,
           user_intent: event.userIntent,
@@ -509,74 +510,5 @@ export class SentryExporter implements Exporter {
       JSON.stringify(itemHeader),
       JSON.stringify(errorEvent),
     ].join("\n");
-  }
-
-  // Keep old method for backward compatibility (deprecated)
-  private createEnvelope(transaction: SentryTransaction): string {
-    return this.createTransactionEnvelope(transaction);
-  }
-
-  private generateEventId(eventId?: string): string {
-    // Sentry expects 32 character hex string without dashes
-    if (eventId) {
-      return this.toHex32(eventId);
-    }
-    return this.randomHex(32);
-  }
-
-  private generateTraceId(sessionId?: string): string {
-    // 32 character hex string for trace ID
-    if (sessionId) {
-      return this.toHex32(sessionId);
-    }
-    return this.randomHex(32);
-  }
-
-  private generateSpanId(eventId?: string): string {
-    // 16 character hex string for span ID
-    if (eventId) {
-      return this.toHex16(eventId);
-    }
-    return this.randomHex(16);
-  }
-
-  private toHex32(str: string): string {
-    // Convert string to 32 character hex
-    const clean = str.replace(/[^a-f0-9]/gi, "").toLowerCase();
-    if (clean.length >= 32) {
-      return clean.substring(0, 32);
-    }
-    // Pad with deterministic hash if too short
-    return (clean + this.simpleHash(str)).padEnd(32, "0").substring(0, 32);
-  }
-
-  private toHex16(str: string): string {
-    // Convert string to 16 character hex
-    const clean = str.replace(/[^a-f0-9]/gi, "").toLowerCase();
-    if (clean.length >= 16) {
-      return clean.substring(0, 16);
-    }
-    // Pad with deterministic hash if too short
-    return (clean + this.simpleHash(str)).padEnd(16, "0").substring(0, 16);
-  }
-
-  private simpleHash(str: string): string {
-    // Simple deterministic hash for padding
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(16);
-  }
-
-  private randomHex(length: number): string {
-    let result = "";
-    const chars = "0123456789abcdef";
-    for (let i = 0; i < length; i++) {
-      result += chars[Math.floor(Math.random() * 16)];
-    }
-    return result;
   }
 }
