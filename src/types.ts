@@ -1,5 +1,4 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types";
-import { PublishEventRequest } from "mcpcat-api";
 
 export interface MCPCatOptions {
   enableReportMissing?: boolean;
@@ -10,6 +9,7 @@ export interface MCPCatOptions {
     extra?: CompatibleRequestHandlerExtra,
   ) => Promise<UserIdentity | null>;
   redactSensitiveInformation?: RedactFunction;
+  exporters?: Record<string, ExporterConfig>;
 }
 
 export type ToolCallback =
@@ -30,14 +30,62 @@ export type RegisteredTool = {
 
 export type RedactFunction = (text: string) => Promise<string>;
 
+export interface ExporterConfig {
+  type: string;
+  [key: string]: any;
+}
+
+export interface Exporter {
+  export(event: Event): Promise<void>;
+}
+
 export enum MCPCatIDPrefixes {
   Session = "ses",
   Event = "evt",
 }
 
-export interface Event extends PublishEventRequest {}
+export interface Event {
+  // Core identification
+  id: string;
+  sessionId: string;
+  projectId?: string; // Optional for telemetry-only mode
 
-export interface UnredactedEvent extends Event {
+  // Event metadata
+  eventType: string; // Changed from enum to string for flexibility
+  timestamp: Date;
+  duration?: number;
+
+  // Session context (from SessionInfo)
+  ipAddress?: string;
+  sdkLanguage?: string;
+  mcpcatVersion?: string;
+  serverName?: string;
+  serverVersion?: string;
+  clientName?: string;
+  clientVersion?: string;
+
+  // Actor/identity information
+  identifyActorGivenId?: string;
+  identifyActorName?: string;
+  identifyActorData?: object;
+
+  // Event-specific data
+  resourceName?: string; // Tool/resource name
+  parameters?: any;
+  response?: any;
+  userIntent?: string;
+
+  // Error tracking
+  isError?: boolean;
+  error?: object;
+
+  // Legacy fields for MCPCat API compatibility
+  actorId?: string; // Maps to identifyActorGivenId in some contexts
+  eventId?: string; // Custom event ID
+  identifyData?: object; // Legacy name for identifyActorData
+}
+
+export interface UnredactedEvent extends Partial<Event> {
   redactionFn?: RedactFunction; // Optional redaction function for sensitive data
 }
 
