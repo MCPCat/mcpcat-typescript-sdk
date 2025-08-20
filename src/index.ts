@@ -32,14 +32,14 @@ import { setTelemetryManager } from "./modules/eventQueue.js";
  * @param options.enableToolCallContext - Injects a "context" parameter to existing tools to capture user intent.
  * @param options.identify - Async function to identify users and attach custom data to their sessions.
  * @param options.redactSensitiveInformation - Function to redact sensitive data before sending to MCPCat.
- * @param options.exporters - Configure telemetry exporters to send events to external systems (e.g., OpenTelemetry, Datadog).
+ * @param options.exporters - Configure telemetry exporters to send events to external systems. Available exporters:
+ *   - `otlp`: OpenTelemetry Protocol exporter (see {@link ../modules/exporters/otlp.OTLPExporter})
+ *   - `datadog`: Datadog APM exporter (see {@link ../modules/exporters/datadog.DatadogExporter})
+ *   - `sentry`: Sentry Monitoring exporter (see {@link ../modules/exporters/sentry.SentryExporter})
  *
  * @returns The tracked server instance.
  *
  * @remarks
- * **IMPORTANT**: The `track()` function must be called AFTER all tools have been registered on the server.
- * Calling it before tool registration will result in those tools not being tracked.
- *
  * Analytics data and debug information are logged to `~/mcpcat.log` since console logs interfere
  * with STDIO-based MCP servers.
  *
@@ -51,13 +51,13 @@ import { setTelemetryManager } from "./modules/eventQueue.js";
  *
  * const mcpServer = new Server({ name: "my-mcp-server", version: "1.0.0" });
  *
- * // Register your tools first
+ * // Track the server with MCPCat
+ * mcpcat.track(mcpServer, "proj_abc123xyz");
+ *
+ * // Register your tools
  * mcpServer.setRequestHandler(ListToolsRequestSchema, async () => ({
  *   tools: [{ name: "my_tool", description: "Does something useful" }]
  * }));
- *
- * // Then call track() after all tools are registered
- * mcpcat.track(mcpServer, "proj_abc123xyz");
  * ```
  *
  * @example
@@ -89,7 +89,10 @@ import { setTelemetryManager } from "./modules/eventQueue.js";
  * // Telemetry-only mode (no MCPCat account required)
  * mcpcat.track(mcpServer, null, {
  *   exporters: {
- *     console: { type: "console" }
+ *     otlp: {
+ *       type: "otlp",
+ *       endpoint: "http://localhost:4318/v1/traces"
+ *     }
  *   }
  * });
  * ```
@@ -99,7 +102,11 @@ import { setTelemetryManager } from "./modules/eventQueue.js";
  * // Dual mode - send to both MCPCat and telemetry exporters
  * mcpcat.track(mcpServer, "proj_abc123xyz", {
  *   exporters: {
- *     console: { type: "console" }
+ *     datadog: {
+ *       type: "datadog",
+ *       apiKey: process.env.DD_API_KEY,
+ *       site: "datadoghq.com"
+ *     }
  *   }
  * });
  * ```

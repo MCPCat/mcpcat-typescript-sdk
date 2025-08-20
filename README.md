@@ -58,10 +58,10 @@ import * as mcpcat from "mcpcat";
 
 const mcpServer = new Server({ name: "echo-mcp", version: "0.1.0" });
 
-// Register tools
-
-// NOTE: track() must be called *after* tools are setup
+// Track the server with MCPCat
 mcpcat.track(mcpServer, "proj_0000000");
+
+// Register your tools
 ```
 
 ### Identifying users
