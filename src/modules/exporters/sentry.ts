@@ -79,6 +79,7 @@ interface SentryErrorEvent {
 interface SentryLog {
   timestamp: number;
   trace_id: string;
+  event_id: string;
   level: "info" | "error";
   body: string;
   attributes?: Record<
@@ -223,6 +224,10 @@ export class SentryExporter implements Exporter {
 
     const traceId = traceContext.getTraceId(event.sessionId);
 
+    // Generate deterministic event_id for Sentry
+    const eventId =
+      traceContext.getSpanId(event.id) + traceContext.getSpanId(event.id);
+
     // Build message
     const message = event.resourceName
       ? `MCP ${event.eventType || "event"}: ${event.resourceName}`
@@ -231,6 +236,7 @@ export class SentryExporter implements Exporter {
     return {
       timestamp,
       trace_id: traceId,
+      event_id: eventId,
       level: event.isError ? "error" : "info",
       body: message,
       attributes: this.buildLogAttributes(event),
@@ -297,7 +303,7 @@ export class SentryExporter implements Exporter {
   private createLogEnvelope(log: SentryLog): string {
     // Envelope header
     const envelopeHeader = {
-      event_id: traceContext.generateSpanId() + traceContext.generateSpanId(),
+      event_id: log.event_id,
       sent_at: new Date().toISOString(),
     };
 
@@ -334,7 +340,7 @@ export class SentryExporter implements Exporter {
       : endTimestamp;
 
     const traceId = traceContext.getTraceId(event.sessionId);
-    const spanId = traceContext.generateSpanId();
+    const spanId = traceContext.getSpanId(event.id);
 
     // Build transaction name
     const transactionName = event.resourceName
@@ -343,7 +349,7 @@ export class SentryExporter implements Exporter {
 
     const transaction: SentryTransaction = {
       type: "transaction",
-      event_id: traceContext.generateSpanId() + traceContext.generateSpanId(),
+      event_id: traceContext.getSpanId(event.id) + traceContext.getSpanId(),
       timestamp: endTimestamp,
       start_timestamp: startTimestamp,
       transaction: transactionName,
@@ -420,7 +426,7 @@ export class SentryExporter implements Exporter {
     const traceId = transaction
       ? transaction.contexts.trace.trace_id
       : traceContext.getTraceId(event.sessionId);
-    const spanId = traceContext.generateSpanId();
+    const spanId = traceContext.getSpanId(event.id);
 
     const timestamp = transaction
       ? transaction.timestamp
@@ -430,7 +436,7 @@ export class SentryExporter implements Exporter {
 
     const errorEvent: SentryErrorEvent = {
       type: "event",
-      event_id: traceContext.generateSpanId() + traceContext.generateSpanId(),
+      event_id: traceContext.getSpanId(event.id) + traceContext.getSpanId(),
       timestamp,
       level: "error",
       exception: {

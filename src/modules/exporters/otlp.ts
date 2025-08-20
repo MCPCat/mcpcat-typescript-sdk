@@ -92,7 +92,7 @@ export class OTLPExporter implements Exporter {
 
     return {
       traceId: traceContext.getTraceId(event.sessionId),
-      spanId: traceContext.generateSpanId(),
+      spanId: traceContext.getSpanId(event.id),
       name: event.eventType || "mcp.event",
       kind: 2, // SPAN_KIND_SERVER
       startTimeUnixNano: startTimeNanos.toString(),

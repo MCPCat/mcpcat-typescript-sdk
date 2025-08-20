@@ -149,8 +149,8 @@ export class DatadogExporter implements Exporter {
       timestamp: event.timestamp ? event.timestamp.getTime() : Date.now(),
       status: event.isError ? "error" : "info",
       dd: {
-        trace_id: traceContext.getTraceId(event.sessionId),
-        span_id: traceContext.generateSpanId(),
+        trace_id: traceContext.getDatadogTraceId(event.sessionId),
+        span_id: traceContext.getDatadogSpanId(event.id),
       },
       mcp: {
         session_id: event.sessionId,
