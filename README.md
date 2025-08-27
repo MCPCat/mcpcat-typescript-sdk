@@ -32,6 +32,8 @@
 
 MCPcat is an analytics platform for MCP server owners 🐱. It captures user intentions and behavior patterns to help you understand what AI users actually need from your tools — eliminating guesswork and accelerating product development all with one-line of code.
 
+This SDK also provides a free and simple way to forward telemetry like logs, traces, and errors to any Open Telemetry collector or popular tools like Datadog and Sentry. 
+
 ```bash
 npm install -S mcpcat
 ```
@@ -50,7 +52,7 @@ Use MCPcat for:
 
 ## Getting Started
 
-To get started with MCPcat, first create an account and obtain your project ID by signing up at [mcpcat.io](https://mcpcat.io).
+To get started with MCPcat, first create an account and obtain your project ID by signing up at [mcpcat.io](https://mcpcat.io). For detailed setup instructions visit our [documentation](https://docs.mcpcat.io).
 
 Once you have your project ID, integrate MCPcat into your MCP server:
 
@@ -100,7 +102,7 @@ MCPcat seamlessly integrates with your existing observability stack, providing a
 
 ```typescript
 mcpcat.track(server, "proj_0000", {
-  // Project ID can be as well "null" since MCPcat is optional when sending data to existing observability platforms
+  // Project ID can optionally be "null" if you just want to forward telemetry
   exporters: {
     otlp: {
       type: "otlp",
