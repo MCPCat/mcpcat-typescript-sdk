@@ -437,10 +437,10 @@ describe("redactEvent integration tests", () => {
       redactSensitiveInformation: redactSensitiveData,
       identify: async () => ({
         userId: "test-user-123",
+        userName: "John Doe",
         userData: {
           email: "user@example.com",
           apiKey: "secret-api-key-123",
-          name: "John Doe",
         },
       }),
     });
@@ -618,8 +618,8 @@ describe("redactEvent integration tests", () => {
       redactSensitiveInformation: aggressiveRedact,
       identify: async () => ({
         userId: "user-with-id-123",
+        userName: "David Smith",
         userData: {
-          name: "David Smith",
           internalId: "internal-id-456",
         },
       }),

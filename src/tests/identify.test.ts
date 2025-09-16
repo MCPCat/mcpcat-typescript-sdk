@@ -457,6 +457,7 @@ describe("Identify Feature", () => {
   describe("Identity Data in Session Info", () => {
     it("should populate actorGivenId, actorName, and actorData in session info", async () => {
       const testUserId = `session-user-${randomUUID()}`;
+      const testUserName = `Session User ${randomUUID()}`;
       const testUserData = {
         name: `Session Test User ${randomUUID()}`,
         role: "Developer",
@@ -468,6 +469,7 @@ describe("Identify Feature", () => {
         enableTracing: true,
         identify: async () => ({
           userId: testUserId,
+          userName: testUserName,
           userData: testUserData,
         }),
       });
@@ -490,7 +492,7 @@ describe("Identify Feature", () => {
 
       expect(sessionInfo).toBeDefined();
       expect(sessionInfo?.identifyActorGivenId).toBe(testUserId);
-      expect(sessionInfo?.identifyActorName).toBe(testUserData.name);
+      expect(sessionInfo?.identifyActorName).toBe(testUserName);
       expect(sessionInfo?.identifyActorData).toEqual(testUserData);
     });
 
@@ -499,6 +501,7 @@ describe("Identify Feature", () => {
       await eventCapture.start();
 
       const testUserId = `event-user-${randomUUID()}`;
+      const testUserName = `Event User ${randomUUID()}`;
       const testUserData = {
         name: `Event Test User ${randomUUID()}`,
         subscription: "premium",
@@ -509,6 +512,7 @@ describe("Identify Feature", () => {
         enableTracing: true,
         identify: async () => ({
           userId: testUserId,
+          userName: testUserName,
           userData: testUserData,
         }),
       });
@@ -539,7 +543,7 @@ describe("Identify Feature", () => {
 
       const data = getServerTrackingData(server.server);
       expect(data?.sessionInfo.identifyActorGivenId).toBe(testUserId);
-      expect(data?.sessionInfo.identifyActorName).toBe(testUserData.name);
+      expect(data?.sessionInfo.identifyActorName).toBe(testUserName);
       expect(data?.sessionInfo.identifyActorData).toEqual(testUserData);
 
       await eventCapture.stop();

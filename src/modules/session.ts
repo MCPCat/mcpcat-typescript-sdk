@@ -66,7 +66,7 @@ export function getSessionInfo(
     clientName: clientInfo?.name,
     clientVersion: clientInfo?.version,
     identifyActorGivenId: actorInfo?.userId,
-    identifyActorName: actorInfo?.userData?.name,
+    identifyActorName: actorInfo?.userName,
     identifyActorData: actorInfo?.userData || {},
   };
 
