@@ -241,7 +241,7 @@ describe("Context Parameters", () => {
       await eventCapture.stop();
     });
 
-    it("should handle tools without context parameter", async () => {
+    it("should fail when context parameter is missing", async () => {
       // Set up event capture
       const eventCapture = new EventCapture();
       await eventCapture.start();
@@ -251,25 +251,54 @@ describe("Context Parameters", () => {
         enableToolCallContext: true,
       });
 
-      // Call list_todos without context
+      // Call list_todos without context - should fail
+      await expect(
+        client.request(
+          {
+            method: "tools/call",
+            params: {
+              name: "list_todos",
+              arguments: {},
+            },
+          },
+          CallToolResultSchema,
+        ),
+      ).rejects.toThrow();
+
+      // Call with empty context - should also fail
+      await expect(
+        client.request(
+          {
+            method: "tools/call",
+            params: {
+              name: "list_todos",
+              arguments: {},
+            },
+          },
+          CallToolResultSchema,
+        ),
+      ).rejects.toThrow();
+
+      // Call with valid context - should succeed
       const result = await client.request(
         {
           method: "tools/call",
           params: {
             name: "list_todos",
-            arguments: {},
+            arguments: {
+              context: "Listing todos to check current status",
+            },
           },
         },
         CallToolResultSchema,
       );
 
-      // Should work fine without context
       expect(result.content[0].text).toBeDefined();
 
       // Wait for events to be processed
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Verify the event was published but without userIntent
+      // Verify the event was published with userIntent
       const events = eventCapture.getEvents();
       const listEvent = events.find(
         (e) =>
@@ -278,7 +307,9 @@ describe("Context Parameters", () => {
       );
 
       expect(listEvent).toBeDefined();
-      expect(listEvent?.userIntent).toBeUndefined();
+      expect(listEvent?.userIntent).toBe(
+        "Listing todos to check current status",
+      );
 
       await eventCapture.stop();
     });

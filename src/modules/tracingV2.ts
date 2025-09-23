@@ -1,4 +1,5 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import {
   HighLevelMCPServerLike,
   MCPServerLike,
@@ -14,6 +15,13 @@ import { publishEvent } from "./eventQueue.js";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { addContextParameterToTool } from "./context-parameters.js";
 import { handleReportMissing } from "./tools.js";
+import { setupInitializeTracing, setupListToolsTracing } from "./tracing.js";
+
+// WeakMap to track which callbacks have already been wrapped
+const wrappedCallbacks = new WeakMap<Function, boolean>();
+
+// Symbol to mark tools that have already been processed
+const MCPCAT_PROCESSED = Symbol("__mcpcat_processed__");
 
 function isToolResultError(result: any): boolean {
   return result && typeof result === "object" && result.isError === true;
@@ -25,7 +33,8 @@ function addContextParametersToToolRegistry(
   return Object.fromEntries(
     Object.entries(tools).map(([name, tool]) => [
       name,
-      addContextParameterToTool(tool),
+      // Skip get_more_tools - it has its own context parameter
+      name === "get_more_tools" ? tool : addContextParameterToTool(tool),
     ]),
   );
 }
@@ -65,13 +74,38 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
             typeof value === "object" &&
             "callback" in value
           ) {
-            // Apply context parameter injection if enabled
-            if (data.options.enableToolCallContext) {
+            // Check if tool has already been processed
+            if ((value as any)[MCPCAT_PROCESSED]) {
+              writeToLog(
+                `Tool ${String(property)} already processed, skipping proxy wrapping`,
+              );
+              // Just set the value without processing
+              return Reflect.set(target, property, value);
+            }
+
+            // Check if callback is already wrapped
+            if (wrappedCallbacks.has(value.callback)) {
+              writeToLog(
+                `Tool ${String(property)} callback already wrapped, skipping proxy wrapping`,
+              );
+              // Just set the value without processing
+              return Reflect.set(target, property, value);
+            }
+
+            // Apply context parameter injection if enabled (skip get_more_tools since it has its own context)
+            if (
+              data.options.enableToolCallContext &&
+              property !== "get_more_tools"
+            ) {
               value = addContextParameterToTool(value);
             }
 
             // Apply tracing to the callback
             value = addTracingToToolCallback(value, property, server);
+
+            // After adding a tool, try to set up list tools tracing
+            // This handles the case where track() is called before tools are registered
+            setupListToolsTracing(server);
 
             // If the tool has an update method, wrap it to handle callback updates
             if (typeof value.update === "function") {
@@ -138,27 +172,51 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
 function addMCPcatToolsToServer(server: HighLevelMCPServerLike): void {
   try {
     const data = getServerTrackingData(server.server as MCPServerLike);
-    if (!data || !data.options.enableReportMissing || !server.tool) {
+    if (!data || !data.options.enableReportMissing) {
       return;
     }
 
-    server.tool(
-      "get_more_tools",
-      "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
-      {
-        context: {
-          type: "string",
+    // Use registerTool if available, otherwise fall back to direct assignment
+    if (server.registerTool) {
+      // Use the MCP SDK registerTool syntax: (name, config, handler)
+      server.registerTool(
+        "get_more_tools",
+        {
           description:
-            "A description of your goal and what kind of tool would help accomplish it.",
+            "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
+          inputSchema: {
+            context: z
+              .string()
+              .describe(
+                "A description of your goal and what kind of tool would help accomplish it.",
+              ),
+          },
         },
-      },
-      async (args: { context: string }) => {
-        return await handleReportMissing({
-          description: args.context,
-          context: args.context,
-        });
-      },
-    );
+        (args: { context: string }) => {
+          return handleReportMissing({
+            context: args.context,
+          });
+        },
+      );
+    } else {
+      // Fallback to direct assignment for compatibility
+      server._registeredTools["get_more_tools"] = {
+        description:
+          "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
+        inputSchema: {
+          context: z
+            .string()
+            .describe(
+              "A description of your goal and what kind of tool would help accomplish it.",
+            ),
+        },
+        callback: (args: { context: string }) => {
+          return handleReportMissing({
+            context: args.context,
+          });
+        },
+      };
+    }
 
     writeToLog("Successfully added MCPcat tools to server");
   } catch (error) {
@@ -173,6 +231,18 @@ function addTracingToToolCallback(
 ): RegisteredTool {
   const originalCallback = tool.callback;
   const lowLevelServer = server.server as MCPServerLike;
+
+  // Check if this callback has already been wrapped
+  if (wrappedCallbacks.has(originalCallback)) {
+    writeToLog(`Tool ${toolName} callback already wrapped, skipping re-wrap`);
+    return tool;
+  }
+
+  // Check if tool has already been processed
+  if ((tool as any)[MCPCAT_PROCESSED]) {
+    writeToLog(`Tool ${toolName} already processed, skipping re-wrap`);
+    return tool;
+  }
 
   // Create a wrapper that matches both callback signatures
   const wrappedCallback = async function (
@@ -209,7 +279,9 @@ function addTracingToToolCallback(
         );
 
         // Remove context from args before calling original callback
-        const cleanedArgs = removeContextFromArgs(args);
+        // BUT keep it for get_more_tools since it's a required parameter
+        const cleanedArgs =
+          toolName === "get_more_tools" ? args : removeContextFromArgs(args);
 
         // Call with original params
         return await (cleanedArgs === undefined
@@ -287,19 +359,15 @@ function addTracingToToolCallback(
           }
         }
 
-        // Check for missing context if enableToolCallContext is true and it's not report_missing
-        if (
-          data.options.enableToolCallContext &&
-          toolName !== "get_more_tools" &&
-          args &&
-          typeof args === "object" &&
-          "context" in args
-        ) {
+        // Extract context for userIntent if present
+        if (args && typeof args === "object" && "context" in args) {
           event.userIntent = args.context;
         }
 
         // Remove context from args before calling original callback
-        const cleanedArgs = removeContextFromArgs(args);
+        // BUT keep it for get_more_tools since it's a required parameter
+        const cleanedArgs =
+          toolName === "get_more_tools" ? args : removeContextFromArgs(args);
 
         let result = await (cleanedArgs === undefined
           ? (
@@ -348,7 +416,9 @@ function addTracingToToolCallback(
       );
 
       // Remove context from args before calling original callback
-      const cleanedArgs = removeContextFromArgs(args);
+      // BUT keep it for get_more_tools since it's a required parameter
+      const cleanedArgs =
+        toolName === "get_more_tools" ? args : removeContextFromArgs(args);
 
       return await (cleanedArgs === undefined
         ? (
@@ -365,15 +435,29 @@ function addTracingToToolCallback(
     }
   };
 
-  // Assign the wrapped callback with proper typing
-  tool.callback = wrappedCallback as RegisteredTool["callback"];
+  // Mark the original callback as wrapped
+  wrappedCallbacks.set(originalCallback, true);
 
-  return tool;
+  // Mark the wrapped callback as well (in case it gets re-wrapped)
+  wrappedCallbacks.set(wrappedCallback, true);
+
+  // Create a new tool object with the wrapped callback
+  const wrappedTool = {
+    ...tool,
+    callback: wrappedCallback as RegisteredTool["callback"],
+  };
+
+  // Mark the tool as processed
+  (wrappedTool as any)[MCPCAT_PROCESSED] = true;
+
+  return wrappedTool;
 }
 
 export function setupTracking(server: HighLevelMCPServerLike): void {
   try {
     const mcpcatData = getServerTrackingData(server.server);
+
+    setupInitializeTracing(server);
     // Modify existing tools to include context parameters in their inputSchemas
     if (mcpcatData?.options.enableToolCallContext) {
       server._registeredTools = addContextParametersToToolRegistry(
@@ -381,16 +465,19 @@ export function setupTracking(server: HighLevelMCPServerLike): void {
       );
     }
 
+    // Add MCPcat tools for reporting missing tools FIRST
+    if (mcpcatData?.options.enableReportMissing) {
+      addMCPcatToolsToServer(server);
+    }
+
     // Modify existing callbacks to include tracing and publishing events
+    // This now includes get_more_tools if it was added
     server._registeredTools = addTracingToToolRegistry(
       server._registeredTools,
       server,
     );
 
-    // Add MCPcat tools for reporting missing tools
-    if (mcpcatData?.options.enableReportMissing) {
-      addMCPcatToolsToServer(server);
-    }
+    setupListToolsTracing(server);
 
     // Proxy the high level server's registered tools to ensure new tools are injected with context parameters and tracing
     setupListenerToRegisteredTools(server);

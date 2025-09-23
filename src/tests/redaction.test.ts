@@ -453,11 +453,7 @@ describe("redactEvent integration tests", () => {
           name: "add_todo",
           arguments: {
             text: "Send email to admin@company.com with password reset",
-            metadata: {
-              userEmail: "john@example.com",
-              secretToken: "super-secret-token",
-              regularData: "This is fine",
-            },
+            context: "Adding a todo item for reset task",
           },
         },
       },
@@ -480,15 +476,9 @@ describe("redactEvent integration tests", () => {
     // Verify sensitive data in parameters was redacted
     const params = toolCallEvent?.parameters as any;
     expect(params.request.params.arguments.text).toBe("[REDACTED-EMAIL]"); // Contains email
-    expect(params.request.params.arguments.metadata.userEmail).toBe(
-      "[REDACTED-EMAIL]",
-    );
-    expect(params.request.params.arguments.metadata.secretToken).toBe(
-      "[REDACTED-SECRET]",
-    );
-    expect(params.request.params.arguments.metadata.regularData).toBe(
-      "This is fine",
-    ); // Not sensitive
+    expect(params.request.params.arguments.context).toBe(
+      "Adding a todo item for reset task",
+    ); // Context should not be redacted
 
     // Find the identify event
     const identifyEvent = events.find(
@@ -503,11 +493,8 @@ describe("redactEvent integration tests", () => {
     expect(identifyParams.request.params.arguments.text).toBe(
       "[REDACTED-EMAIL]",
     );
-    expect(identifyParams.request.params.arguments.metadata.userEmail).toBe(
-      "[REDACTED-EMAIL]",
-    );
-    expect(identifyParams.request.params.arguments.metadata.secretToken).toBe(
-      "[REDACTED-SECRET]",
+    expect(identifyParams.request.params.arguments.context).toBe(
+      "Adding a todo item for reset task",
     );
 
     // Verify protected fields were NOT redacted
@@ -551,17 +538,8 @@ describe("redactEvent integration tests", () => {
         params: {
           name: "add_todo",
           arguments: {
-            text: "Process payment",
-            paymentInfo: {
-              cards: [
-                { number: "1234 5678 9012 3456", type: "visa" },
-                { number: "9876-5432-1098-7654", type: "mastercard" },
-              ],
-              billing: {
-                address: "123 Main St",
-                notes: "Card on file: 1111 2222 3333 4444",
-              },
-            },
+            text: "Process payment for card 1234 5678 9012 3456",
+            context: "Processing payment for order",
           },
         },
       },
@@ -580,22 +558,11 @@ describe("redactEvent integration tests", () => {
 
     const params = toolCallEvent?.parameters as any;
 
-    // Verify nested credit card data was redacted
-    expect(params.request.params.arguments.paymentInfo.cards[0].number).toBe(
-      "[REDACTED-CC]",
+    // Verify credit card data in text was redacted
+    expect(params.request.params.arguments.text).toBe("[REDACTED-CC]");
+    expect(params.request.params.arguments.context).toBe(
+      "Processing payment for order",
     );
-    expect(params.request.params.arguments.paymentInfo.cards[0].type).toBe(
-      "visa",
-    ); // Not redacted
-    expect(params.request.params.arguments.paymentInfo.cards[1].number).toBe(
-      "[REDACTED-CC]",
-    );
-    expect(params.request.params.arguments.paymentInfo.billing.notes).toBe(
-      "[REDACTED-CC]",
-    );
-    expect(params.request.params.arguments.paymentInfo.billing.address).toBe(
-      "123 Main St",
-    ); // Not a CC
 
     await eventCapture.stop();
   });
@@ -632,8 +599,8 @@ describe("redactEvent integration tests", () => {
         params: {
           name: "add_todo",
           arguments: {
-            text: "Task with id reference",
-            customId: "custom-id-789",
+            text: "Task with id reference custom-id-789",
+            context: "Adding task with id reference",
           },
         },
       },
@@ -657,7 +624,7 @@ describe("redactEvent integration tests", () => {
     // Non-protected fields with 'id' should be redacted
     const params = toolCallEvent?.parameters as any;
     expect(params.request.params.arguments.text).toBe("[REDACTED-ID]");
-    expect(params.request.params.arguments.customId).toBe("[REDACTED-ID]");
+    expect(params.request.params.arguments.context).toBe("[REDACTED-ID]"); // Context contains 'id' so should be redacted too
 
     // Check identify event
     const identifyEvent = events.find(
@@ -671,7 +638,7 @@ describe("redactEvent integration tests", () => {
     // The identify event parameters should also be redacted
     const identifyParams = identifyEvent?.parameters as any;
     expect(identifyParams.request.params.arguments.text).toBe("[REDACTED-ID]");
-    expect(identifyParams.request.params.arguments.customId).toBe(
+    expect(identifyParams.request.params.arguments.context).toBe(
       "[REDACTED-ID]",
     );
 

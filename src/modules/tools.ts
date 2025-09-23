@@ -11,10 +11,7 @@ import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 
-export async function handleReportMissing(args: {
-  description: string;
-  context?: string;
-}) {
+export function handleReportMissing(args: { context: string }) {
   writeToLog(`Missing tool reported: ${JSON.stringify(args)}`);
 
   return {
@@ -103,23 +100,25 @@ export function setupMCPCatTools(server: MCPServerLike): void {
         tools = addContextParameterToTools(tools);
       }
 
-      // Add report_missing tool
-      tools.push({
-        name: "get_more_tools",
-        description:
-          "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            context: {
-              type: "string",
-              description:
-                "A description of your goal and what kind of tool would help accomplish it.",
+      // Add report_missing tool if enabled
+      if (data.options.enableReportMissing) {
+        tools.push({
+          name: "get_more_tools",
+          description:
+            "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              context: {
+                type: "string",
+                description:
+                  "A description of your goal and what kind of tool would help accomplish it.",
+              },
             },
+            required: ["context"],
           },
-          required: ["context"],
-        },
-      });
+        });
+      }
 
       event.response = { tools };
       event.isError = false;

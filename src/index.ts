@@ -162,22 +162,22 @@ function track(
     if (isHighLevelServer(validatedServer)) {
       const highLevelServer = validatedServer as HighLevelMCPServerLike;
       setupTracking(highLevelServer);
-    }
-
-    if (mcpcatData.options.enableReportMissing) {
-      try {
-        setupMCPCatTools(lowLevelServer);
-      } catch (error) {
-        writeToLog(`Warning: Failed to setup report missing tool - ${error}`);
+    } else {
+      if (mcpcatData.options.enableReportMissing) {
+        try {
+          setupMCPCatTools(lowLevelServer);
+        } catch (error) {
+          writeToLog(`Warning: Failed to setup report missing tool - ${error}`);
+        }
       }
-    }
 
-    if (mcpcatData.options.enableTracing) {
-      try {
-        // Pass the low-level server to the current tracing module
-        setupToolCallTracing(lowLevelServer);
-      } catch (error) {
-        writeToLog(`Warning: Failed to setup tool call tracing - ${error}`);
+      if (mcpcatData.options.enableTracing) {
+        try {
+          // Pass the low-level server to the current tracing module
+          setupToolCallTracing(lowLevelServer);
+        } catch (error) {
+          writeToLog(`Warning: Failed to setup tool call tracing - ${error}`);
+        }
       }
     }
 

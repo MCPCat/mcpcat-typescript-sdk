@@ -63,6 +63,7 @@ describe("Identify Feature", () => {
             name: "add_todo",
             arguments: {
               text: "Test todo for identification",
+              context: "Adding a todo item for identification test",
             },
           },
         },
@@ -123,6 +124,7 @@ describe("Identify Feature", () => {
             name: "add_todo",
             arguments: {
               text: "First todo",
+              context: "Adding a todo item for identification test",
             },
           },
         },
@@ -137,7 +139,9 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "list_todos",
-            arguments: {},
+            arguments: {
+              context: "Adding a todo item for identification test",
+            },
           },
         },
         CallToolResultSchema,
@@ -153,6 +157,7 @@ describe("Identify Feature", () => {
             name: "complete_todo",
             arguments: {
               id: "1",
+              context: "Completing a todo item for identification test",
             },
           },
         },
@@ -294,7 +299,10 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "Todo 1" },
+            arguments: {
+              text: "Todo 1",
+              context: "Adding a todo item for reset task",
+            },
           },
         },
         CallToolResultSchema,
@@ -305,7 +313,10 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "Todo 2" },
+            arguments: {
+              text: "Todo 2",
+              context: "Adding a todo item for reset task",
+            },
           },
         },
         CallToolResultSchema,
@@ -316,7 +327,7 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "list_todos",
-            arguments: {},
+            arguments: { context: "Listing todos for reset task" },
           },
         },
         CallToolResultSchema,
@@ -367,7 +378,10 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "Test todo" },
+            arguments: {
+              text: "Test todo",
+              context: "Adding a todo item for null identity test",
+            },
           },
         },
         CallToolResultSchema,
@@ -412,7 +426,10 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "Anonymous todo" },
+            arguments: {
+              text: "Anonymous todo",
+              context: "Adding a todo item for anonymous test",
+            },
           },
         },
         CallToolResultSchema,
@@ -423,7 +440,7 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "list_todos",
-            arguments: {},
+            arguments: { context: "Listing todos for anonymous test" },
           },
         },
         CallToolResultSchema,
@@ -480,7 +497,10 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "Test session info" },
+            arguments: {
+              text: "Test session info",
+              context: "Adding a todo item for session info test",
+            },
           },
         },
         CallToolResultSchema,
@@ -523,7 +543,10 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "Test event data" },
+            arguments: {
+              text: "Test event data",
+              context: "Adding a todo item for event data test",
+            },
           },
         },
         CallToolResultSchema,
@@ -581,7 +604,10 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "Async test todo" },
+            arguments: {
+              text: "Async test todo",
+              context: "Adding a todo item for async test",
+            },
           },
         },
         CallToolResultSchema,
@@ -625,7 +651,10 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "Error test todo" },
+            arguments: {
+              text: "Error test todo",
+              context: "Adding a todo item for error test",
+            },
           },
         },
         CallToolResultSchema,
@@ -676,7 +705,10 @@ describe("Identify Feature", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "Invalid identity test" },
+            arguments: {
+              text: "Invalid identity test",
+              context: "Adding a todo item for invalid identity test",
+            },
           },
         },
         CallToolResultSchema,

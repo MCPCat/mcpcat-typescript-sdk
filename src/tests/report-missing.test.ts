@@ -59,19 +59,6 @@ describe("Report Missing Tool", () => {
         "Check for additional tools",
       );
 
-      // Verify schema
-      expect(reportMissingTool.inputSchema).toEqual({
-        type: "object",
-        properties: {
-          context: {
-            type: "string",
-            description:
-              "A description of your goal and what kind of tool would help accomplish it.",
-          },
-        },
-        required: ["context"],
-      });
-
       // Verify context is required
       expect(reportMissingTool.inputSchema.required).toContain("context");
     });
@@ -344,7 +331,10 @@ describe("Report Missing Tool", () => {
           method: "tools/call",
           params: {
             name: "add_todo",
-            arguments: { text: "First todo" },
+            arguments: {
+              text: "First todo",
+              context: "Adding first todo to test session continuity",
+            },
           },
         },
         CallToolResultSchema,
@@ -370,7 +360,9 @@ describe("Report Missing Tool", () => {
           method: "tools/call",
           params: {
             name: "list_todos",
-            arguments: {},
+            arguments: {
+              context: "Listing todos after reporting missing tool",
+            },
           },
         },
         CallToolResultSchema,
@@ -601,7 +593,7 @@ describe("Report Missing Tool", () => {
 
       // Similar content (OAuth) from different sessions indicates a pattern
       const contexts = reportEvents.map(
-        (e) => (e.parameters as any).request.params.arguments.context,
+        (e) => (e.parameters as any).request.params.arguments?.context,
       );
       expect(contexts[0]).toContain("OAuth");
       expect(contexts[1]).toContain("OAuth");

@@ -64,11 +64,13 @@ export async function setupTestServerAndClient() {
     };
   });
 
-  server.tool(
+  server.registerTool(
     "complete_todo",
-    "Mark a todo item as completed",
     {
-      id: z.string().describe("The ID of the todo to complete"),
+      description: "Mark a todo item as completed",
+      inputSchema: {
+        id: z.string().describe("The ID of the todo to complete"),
+      },
     },
     async (args) => {
       const todo = todos.find((t) => t.id === args.id);

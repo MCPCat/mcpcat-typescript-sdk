@@ -114,6 +114,14 @@ export interface HighLevelMCPServerLike {
     paramsSchema: any,
     cb: ToolCallback,
   ): void;
+  registerTool?(
+    name: string,
+    config: {
+      description?: string;
+      inputSchema?: any;
+    },
+    handler: ToolCallback,
+  ): void;
 }
 
 export interface MCPServerLike {
