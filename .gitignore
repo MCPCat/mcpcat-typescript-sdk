@@ -67,3 +67,6 @@ coverage
 
 # Changeset files (optional, some projects want to track these)
 # .changeset/
+.serena
+AGENTS.md
+
