@@ -751,4 +751,572 @@ describe("Identify Feature", () => {
       await eventCapture.stop();
     });
   });
+
+  describe("Identity Merging Behavior", () => {
+    it("should override userId/userName but merge userData fields", async () => {
+      const eventCapture = new EventCapture();
+      await eventCapture.start();
+
+      let callCount = 0;
+      const firstUserId = `user-${randomUUID()}`;
+      const secondUserId = `user-${randomUUID()}`;
+
+      // Enable tracking with identify function that returns different data on each call
+      track(server, "test-project", {
+        enableTracing: true,
+        identify: async () => {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              userId: firstUserId,
+              userName: "Alice",
+              userData: {
+                role: "admin",
+                department: "Engineering",
+              },
+            };
+          } else {
+            return {
+              userId: secondUserId,
+              userName: "Bob",
+              userData: {
+                department: "Sales", // This should overwrite
+                location: "NYC", // This should be added
+              },
+            };
+          }
+        },
+      });
+
+      // First tool call - sets initial identity
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "add_todo",
+            arguments: {
+              text: "First todo",
+              context: "Testing identity merge",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      // Wait for first identify to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Verify first identity was stored
+      const data = getServerTrackingData(server.server);
+      const sessionId = data?.sessionId;
+      let storedIdentity = data?.identifiedSessions.get(sessionId!);
+
+      expect(storedIdentity).toEqual({
+        userId: firstUserId,
+        userName: "Alice",
+        userData: {
+          role: "admin",
+          department: "Engineering",
+        },
+      });
+
+      // Second tool call - should merge identities
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "list_todos",
+            arguments: {
+              context: "Testing identity merge again",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      // Wait for second identify to complete
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Verify merged identity
+      storedIdentity = data?.identifiedSessions.get(sessionId!);
+
+      expect(storedIdentity).toEqual({
+        userId: secondUserId, // Overwritten
+        userName: "Bob", // Overwritten
+        userData: {
+          role: "admin", // Preserved from first call
+          department: "Sales", // Overwritten from first call
+          location: "NYC", // Added in second call
+        },
+      });
+
+      // Verify two identify events were published (both represent changes)
+      const events = eventCapture.getEvents();
+      const identifyEvents = events.filter(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpcatIdentify,
+      );
+
+      expect(identifyEvents.length).toBe(2);
+
+      await eventCapture.stop();
+    });
+
+    it("should merge complex nested userData fields correctly", async () => {
+      const eventCapture = new EventCapture();
+      await eventCapture.start();
+
+      let callCount = 0;
+      const userId = `user-${randomUUID()}`;
+
+      track(server, "test-project", {
+        enableTracing: true,
+        identify: async () => {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              userId: userId,
+              userData: {
+                name: "Alice",
+                role: "admin",
+                preferences: {
+                  theme: "dark",
+                  language: "en",
+                },
+                permissions: ["read", "write"],
+              },
+            };
+          } else {
+            return {
+              userId: userId,
+              userData: {
+                role: "user", // Overwrite
+                location: "NYC", // Add new field
+                preferences: {
+                  // This will replace the entire preferences object
+                  theme: "light",
+                  notifications: true,
+                },
+              },
+            };
+          }
+        },
+      });
+
+      // First tool call
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "add_todo",
+            arguments: {
+              text: "Test",
+              context: "Testing complex merge",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Second tool call
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "list_todos",
+            arguments: {
+              context: "Testing complex merge again",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Verify final merged identity
+      const data = getServerTrackingData(server.server);
+      const sessionId = data?.sessionId;
+      const storedIdentity = data?.identifiedSessions.get(sessionId!);
+
+      expect(storedIdentity).toEqual({
+        userId: userId,
+        userData: {
+          name: "Alice", // Preserved
+          role: "user", // Overwritten
+          location: "NYC", // Added
+          permissions: ["read", "write"], // Preserved
+          preferences: {
+            // Completely replaced (not deep merged)
+            theme: "light",
+            notifications: true,
+          },
+        },
+      });
+
+      await eventCapture.stop();
+    });
+
+    it("should overwrite userData field when same key provided in subsequent call", async () => {
+      const eventCapture = new EventCapture();
+      await eventCapture.start();
+
+      let callCount = 0;
+      const userId = `user-${randomUUID()}`;
+
+      track(server, "test-project", {
+        enableTracing: true,
+        identify: async () => {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              userId: userId,
+              userData: {
+                setting: "value1",
+                counter: 1,
+              },
+            };
+          } else {
+            return {
+              userId: userId,
+              userData: {
+                setting: "value2", // Overwrite
+                counter: 2, // Overwrite
+              },
+            };
+          }
+        },
+      });
+
+      // First call
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "add_todo",
+            arguments: {
+              text: "Test",
+              context: "Testing overwrite",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Second call
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "list_todos",
+            arguments: {
+              context: "Testing overwrite again",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const data = getServerTrackingData(server.server);
+      const sessionId = data?.sessionId;
+      const storedIdentity = data?.identifiedSessions.get(sessionId!);
+
+      expect(storedIdentity?.userData?.setting).toBe("value2");
+      expect(storedIdentity?.userData?.counter).toBe(2);
+
+      await eventCapture.stop();
+    });
+
+    it("should only publish identify events when identity actually changes", async () => {
+      const eventCapture = new EventCapture();
+      await eventCapture.start();
+
+      let callCount = 0;
+      const userId = `user-${randomUUID()}`;
+
+      track(server, "test-project", {
+        enableTracing: true,
+        identify: async () => {
+          callCount++;
+          if (callCount === 1) {
+            // First call - new identity
+            return {
+              userId: userId,
+              userData: { field1: "value1" },
+            };
+          } else if (callCount === 2) {
+            // Second call - same identity (no change)
+            return {
+              userId: userId,
+              userData: { field1: "value1" },
+            };
+          } else if (callCount === 3) {
+            // Third call - change in userData
+            return {
+              userId: userId,
+              userData: { field1: "value1", field2: "value2" },
+            };
+          } else {
+            // Fourth call - same as third (no change)
+            return {
+              userId: userId,
+              userData: { field1: "value1", field2: "value2" },
+            };
+          }
+        },
+      });
+
+      // Call 1 - should publish (new identity)
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "add_todo",
+            arguments: { text: "1", context: "Test" },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      let events = eventCapture.getEvents();
+      let identifyEvents = events.filter(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpcatIdentify,
+      );
+      expect(identifyEvents.length).toBe(1);
+
+      // Call 2 - should NOT publish (same identity)
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "list_todos",
+            arguments: { context: "Test" },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      events = eventCapture.getEvents();
+      identifyEvents = events.filter(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpcatIdentify,
+      );
+      expect(identifyEvents.length).toBe(1); // Still only 1
+
+      // Call 3 - should publish (userData changed)
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "add_todo",
+            arguments: { text: "2", context: "Test" },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      events = eventCapture.getEvents();
+      identifyEvents = events.filter(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpcatIdentify,
+      );
+      expect(identifyEvents.length).toBe(2); // Now 2
+
+      // Call 4 - should NOT publish (same as call 3)
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "list_todos",
+            arguments: { context: "Test" },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      events = eventCapture.getEvents();
+      identifyEvents = events.filter(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpcatIdentify,
+      );
+      expect(identifyEvents.length).toBe(2); // Still only 2
+
+      await eventCapture.stop();
+    });
+
+    it("should preserve userData when subsequent identify call has no userData", async () => {
+      const eventCapture = new EventCapture();
+      await eventCapture.start();
+
+      let callCount = 0;
+      const userId = `user-${randomUUID()}`;
+
+      track(server, "test-project", {
+        enableTracing: true,
+        identify: async () => {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              userId: userId,
+              userData: {
+                importantField: "importantValue",
+                metadata: { created: "2025-01-01" },
+              },
+            };
+          } else {
+            // Second call doesn't include userData
+            return {
+              userId: userId,
+            };
+          }
+        },
+      });
+
+      // First call - sets userData
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "add_todo",
+            arguments: {
+              text: "Test",
+              context: "Testing userData preservation",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Verify initial userData
+      const data = getServerTrackingData(server.server);
+      const sessionId = data?.sessionId;
+      let storedIdentity = data?.identifiedSessions.get(sessionId!);
+
+      expect(storedIdentity?.userData).toEqual({
+        importantField: "importantValue",
+        metadata: { created: "2025-01-01" },
+      });
+
+      // Second call - no userData in return value
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "list_todos",
+            arguments: {
+              context: "Testing userData preservation again",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Verify userData is still preserved
+      storedIdentity = data?.identifiedSessions.get(sessionId!);
+
+      expect(storedIdentity?.userData).toEqual({
+        importantField: "importantValue",
+        metadata: { created: "2025-01-01" },
+      });
+
+      await eventCapture.stop();
+    });
+
+    it("should handle userName being added in subsequent identify call", async () => {
+      const eventCapture = new EventCapture();
+      await eventCapture.start();
+
+      let callCount = 0;
+      const userId = `user-${randomUUID()}`;
+
+      track(server, "test-project", {
+        enableTracing: true,
+        identify: async () => {
+          callCount++;
+          if (callCount === 1) {
+            // First call - no userName
+            return {
+              userId: userId,
+              userData: { role: "admin" },
+            };
+          } else {
+            // Second call - adds userName
+            return {
+              userId: userId,
+              userName: "Alice Smith",
+              userData: { department: "Engineering" },
+            };
+          }
+        },
+      });
+
+      // First call
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "add_todo",
+            arguments: { text: "Test", context: "Testing userName addition" },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const data = getServerTrackingData(server.server);
+      const sessionId = data?.sessionId;
+      let storedIdentity = data?.identifiedSessions.get(sessionId!);
+
+      expect(storedIdentity?.userName).toBeUndefined();
+
+      // Second call
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "list_todos",
+            arguments: { context: "Testing userName addition again" },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      storedIdentity = data?.identifiedSessions.get(sessionId!);
+
+      expect(storedIdentity).toEqual({
+        userId: userId,
+        userName: "Alice Smith",
+        userData: {
+          role: "admin", // Preserved
+          department: "Engineering", // Added
+        },
+      });
+
+      // Should publish 2 identify events (both represent changes)
+      const events = eventCapture.getEvents();
+      const identifyEvents = events.filter(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpcatIdentify,
+      );
+      expect(identifyEvents.length).toBe(2);
+
+      await eventCapture.stop();
+    });
+  });
 });
