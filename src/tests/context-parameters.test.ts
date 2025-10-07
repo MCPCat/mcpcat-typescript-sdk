@@ -11,6 +11,7 @@ import {
 } from "@modelcontextprotocol/sdk/types";
 import { EventCapture } from "./test-utils";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
+import { DEFAULT_CONTEXT_PARAMETER_DESCRIPTION } from "../modules/constants";
 
 describe("Context Parameters", () => {
   let server: any;
@@ -348,7 +349,39 @@ describe("Context Parameters", () => {
         expect(tool.inputSchema.properties.context).toBeDefined();
         expect(tool.inputSchema.properties.context.type).toBe("string");
         expect(tool.inputSchema.properties.context.description).toBe(
-          "Describe why you are calling this tool and how it fits into your overall task",
+          DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
+        );
+      });
+    });
+
+    it("should use default context description when no custom description is provided", async () => {
+      // Enable tracking WITHOUT customContextDescription
+      track(server, "test-project", {
+        enableToolCallContext: true,
+      });
+
+      // Get the tools list
+      const toolsResponse = await client.request(
+        {
+          method: "tools/list",
+          params: {},
+        },
+        ListToolsResultSchema,
+      );
+
+      // Find all original tools
+      const originalTools = ["add_todo", "list_todos", "complete_todo"];
+      const toolsToCheck = toolsResponse.tools.filter((tool: any) =>
+        originalTools.includes(tool.name),
+      );
+
+      expect(toolsToCheck.length).toBe(3);
+
+      // Verify all tools use the default description
+      toolsToCheck.forEach((tool: any) => {
+        expect(tool.inputSchema.properties.context).toBeDefined();
+        expect(tool.inputSchema.properties.context.description).toBe(
+          DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
         );
       });
     });

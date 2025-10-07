@@ -4,6 +4,7 @@ export interface MCPCatOptions {
   enableReportMissing?: boolean;
   enableTracing?: boolean;
   enableToolCallContext?: boolean;
+  customContextDescription?: string;
   identify?: (
     request: any,
     extra?: CompatibleRequestHandlerExtra,

@@ -99,10 +99,13 @@ describe("Identify Feature", () => {
       await eventCapture.stop();
     });
 
-    it("should not call identify function on subsequent tool calls in same session", async () => {
+    it("should call identify function on each tool call but only publish event when identity changes", async () => {
       let identifyCallCount = 0;
       const userId = `user-${randomUUID()}`;
       const userName = `Another User ${randomUUID()}`;
+
+      const eventCapture = new EventCapture();
+      await eventCapture.start();
 
       // Enable tracking with identify function
       track(server, "test-project", {
@@ -116,7 +119,7 @@ describe("Identify Feature", () => {
         },
       });
 
-      // First tool call - should trigger identify
+      // First tool call - should trigger identify and publish event
       await client.request(
         {
           method: "tools/call",
@@ -132,8 +135,13 @@ describe("Identify Feature", () => {
       );
 
       expect(identifyCallCount).toBe(1);
+      const events1 = await eventCapture.getEvents();
+      const identifyEvents1 = events1.filter(
+        (e) => e.eventType === "mcpcat:identify",
+      );
+      expect(identifyEvents1.length).toBe(1); // First identify event published
 
-      // Second tool call - should NOT trigger identify again
+      // Second tool call - should call identify but NOT publish event (identity unchanged)
       await client.request(
         {
           method: "tools/call",
@@ -147,9 +155,14 @@ describe("Identify Feature", () => {
         CallToolResultSchema,
       );
 
-      expect(identifyCallCount).toBe(1); // Still 1, not called again
+      expect(identifyCallCount).toBe(2); // Called again
+      const events2 = await eventCapture.getEvents();
+      const identifyEvents2 = events2.filter(
+        (e) => e.eventType === "mcpcat:identify",
+      );
+      expect(identifyEvents2.length).toBe(1); // Still only 1 event (no new event published)
 
-      // Third tool call - should still not trigger identify
+      // Third tool call - should call identify but still NOT publish event
       await client.request(
         {
           method: "tools/call",
@@ -164,7 +177,14 @@ describe("Identify Feature", () => {
         CallToolResultSchema,
       );
 
-      expect(identifyCallCount).toBe(1); // Still 1
+      expect(identifyCallCount).toBe(3); // Called again
+      const events3 = await eventCapture.getEvents();
+      const identifyEvents3 = events3.filter(
+        (e) => e.eventType === "mcpcat:identify",
+      );
+      expect(identifyEvents3.length).toBe(1); // Still only 1 event
+
+      await eventCapture.stop();
     });
 
     it("should properly identify when calling tools added after track()", async () => {
