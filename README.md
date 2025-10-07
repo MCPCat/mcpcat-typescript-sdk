@@ -16,7 +16,7 @@
     <span> · </span>
     <a href="#free-for-open-source">Open Source</a>
     <span> · </span>
-    <a href="https://discord.gg/n9qpyhzp2u">Discord</a>
+    <a href="https://meet.mcpcat.io/meet">Schedule a Demo</a>
 </h3>
 <p align="center">
   <a href="https://badge.fury.io/js/mcpcat"><img src="https://badge.fury.io/js/mcpcat.svg" alt="npm version"></a>
