@@ -1,5 +1,6 @@
 import { RegisteredTool } from "../types";
 import { z } from "zod";
+import { DEFAULT_CONTEXT_PARAMETER_DESCRIPTION } from "./constants";
 
 // Detect if something is a Zod schema (has _def and parse methods)
 function isZodSchema(schema: any): boolean {
@@ -23,6 +24,7 @@ function isShorthandZodSyntax(schema: any): boolean {
 
 export function addContextParameterToTool(
   tool: RegisteredTool,
+  customContextDescription?: string,
 ): RegisteredTool {
   // Create a shallow copy of the tool to avoid modifying the original
   const modifiedTool = { ...tool };
@@ -55,7 +57,7 @@ export function addContextParameterToTool(
       context: z
         .string()
         .describe(
-          "Describe why you are calling this tool and how it fits into your overall task",
+          customContextDescription || DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
         ),
     });
 
@@ -86,7 +88,7 @@ export function addContextParameterToTool(
     const contextField = z
       .string()
       .describe(
-        "Describe why you are calling this tool and how it fits into your overall task",
+        customContextDescription || DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
       );
 
     // Create new z.object with context and all original fields
@@ -114,7 +116,7 @@ export function addContextParameterToTool(
     modifiedTool.inputSchema.properties.context = {
       type: "string",
       description:
-        "Describe why you are calling this tool and how it fits into your overall task",
+        customContextDescription || DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
     };
 
     // Add context to required array if it exists
@@ -133,12 +135,13 @@ export function addContextParameterToTool(
 
 export function addContextParameterToTools(
   tools: RegisteredTool[],
+  customContextDescription?: string,
 ): RegisteredTool[] {
   return tools.map((tool) => {
     // Skip get_more_tools - it has its own special context parameter
     if ((tool as any).name === "get_more_tools") {
       return tool;
     }
-    return addContextParameterToTool(tool);
+    return addContextParameterToTool(tool, customContextDescription);
   });
 }

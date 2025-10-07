@@ -97,7 +97,10 @@ export function setupMCPCatTools(server: MCPServerLike): void {
 
       // Add context parameter to all existing tools if enableToolCallContext is true
       if (data.options.enableToolCallContext) {
-        tools = addContextParameterToTools(tools);
+        tools = addContextParameterToTools(
+          tools,
+          data.options.customContextDescription,
+        );
       }
 
       // Add report_missing tool if enabled

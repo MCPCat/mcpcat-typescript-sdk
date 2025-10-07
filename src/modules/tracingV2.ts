@@ -8,7 +8,11 @@ import {
   CompatibleRequestHandlerExtra,
 } from "../types.js";
 import { writeToLog } from "./logging.js";
-import { getServerTrackingData } from "./internal.js";
+import {
+  getServerTrackingData,
+  areIdentitiesEqual,
+  mergeIdentities,
+} from "./internal.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
@@ -29,12 +33,15 @@ function isToolResultError(result: any): boolean {
 
 function addContextParametersToToolRegistry(
   tools: Record<string, RegisteredTool>,
+  customContextDescription?: string,
 ): Record<string, RegisteredTool> {
   return Object.fromEntries(
     Object.entries(tools).map(([name, tool]) => [
       name,
       // Skip get_more_tools - it has its own context parameter
-      name === "get_more_tools" ? tool : addContextParameterToTool(tool),
+      name === "get_more_tools"
+        ? tool
+        : addContextParameterToTool(tool, customContextDescription),
     ]),
   );
 }
@@ -97,7 +104,10 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
               data.options.enableToolCallContext &&
               property !== "get_more_tools"
             ) {
-              value = addContextParameterToTool(value);
+              value = addContextParameterToTool(
+                value,
+                data.options.customContextDescription,
+              );
             }
 
             // Apply tracing to the callback
@@ -321,11 +331,8 @@ function addTracingToToolCallback(
       };
 
       try {
-        // Try to identify the session if we haven't already and identify function is provided
-        if (
-          data.options.identify &&
-          data.identifiedSessions.get(sessionId) === undefined
-        ) {
+        // Try to identify the session if identify function is provided
+        if (data.options.identify) {
           let identifyEvent: UnredactedEvent = {
             ...event,
             eventType: PublishEventRequestEventTypeEnum.mcpcatIdentify,
@@ -333,11 +340,30 @@ function addTracingToToolCallback(
           try {
             const identityResult = await data.options.identify(request, extra);
             if (identityResult) {
-              writeToLog(
-                `Identified session ${sessionId} with identity: ${JSON.stringify(identityResult)}`,
+              // Get previous identity for this session
+              const previousIdentity = data.identifiedSessions.get(sessionId);
+
+              // Merge identities (overwrite userId/userName, merge userData)
+              const mergedIdentity = mergeIdentities(
+                previousIdentity,
+                identityResult,
               );
-              data.identifiedSessions.set(sessionId, identityResult);
-              publishEvent(lowLevelServer, identifyEvent);
+
+              // Only publish if identity has changed
+              const hasChanged =
+                !previousIdentity ||
+                !areIdentitiesEqual(previousIdentity, mergedIdentity);
+
+              // Always update the stored identity with the merged version FIRST
+              // so that publishEvent can get the latest identity in sessionInfo
+              data.identifiedSessions.set(sessionId, mergedIdentity);
+
+              if (hasChanged) {
+                writeToLog(
+                  `Identified session ${sessionId} with identity: ${JSON.stringify(mergedIdentity)}`,
+                );
+                publishEvent(lowLevelServer, identifyEvent);
+              }
             } else {
               writeToLog(
                 `Warning: Supplied identify function returned null for session ${sessionId}`,
@@ -462,6 +488,7 @@ export function setupTracking(server: HighLevelMCPServerLike): void {
     if (mcpcatData?.options.enableToolCallContext) {
       server._registeredTools = addContextParametersToToolRegistry(
         server._registeredTools,
+        mcpcatData.options.customContextDescription,
       );
     }
 

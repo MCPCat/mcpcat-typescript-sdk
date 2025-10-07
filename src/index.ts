@@ -30,6 +30,7 @@ import { setTelemetryManager } from "./modules/eventQueue.js";
  * @param options.enableReportMissing - Adds a "get_more_tools" tool that allows LLMs to automatically report missing functionality.
  * @param options.enableTracing - Enables tracking of tool calls and usage patterns.
  * @param options.enableToolCallContext - Injects a "context" parameter to existing tools to capture user intent.
+ * @param options.customContextDescription - Custom description for the injected context parameter. Only applies when enableToolCallContext is true. Use this to provide domain-specific guidance to LLMs about what context they should provide.
  * @param options.identify - Async function to identify users and attach custom data to their sessions.
  * @param options.redactSensitiveInformation - Function to redact sensitive data before sending to MCPCat.
  * @param options.exporters - Configure telemetry exporters to send events to external systems. Available exporters:
@@ -71,6 +72,15 @@ import { setTelemetryManager } from "./modules/eventQueue.js";
  *       userData: { plan: user.plan, company: user.company }
  *     };
  *   }
+ * });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // With custom context description
+ * mcpcat.track(mcpServer, "proj_abc123xyz", {
+ *   enableToolCallContext: true,
+ *   customContextDescription: "Explain why you're calling this tool and what business objective it helps achieve"
  * });
  * ```
  *
@@ -153,6 +163,7 @@ function track(
         enableReportMissing: options.enableReportMissing ?? true,
         enableTracing: options.enableTracing ?? true,
         enableToolCallContext: options.enableToolCallContext ?? true,
+        customContextDescription: options.customContextDescription,
         identify: options.identify,
         redactSensitiveInformation: options.redactSensitiveInformation,
       },

@@ -11,7 +11,11 @@ import {
 } from "../types.js";
 import { writeToLog } from "./logging.js";
 import { handleReportMissing } from "./tools.js";
-import { getServerTrackingData } from "./internal.js";
+import {
+  getServerTrackingData,
+  areIdentitiesEqual,
+  mergeIdentities,
+} from "./internal.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
@@ -223,10 +227,7 @@ export function setupToolCallTracing(server: MCPServerLike): void {
 
       try {
         // Try to identify the session if we haven't already and identify function is provided
-        if (
-          data.options.identify &&
-          data.identifiedSessions.get(sessionId) === undefined
-        ) {
+        if (data.options.identify) {
           let identifyEvent: UnredactedEvent = {
             ...event,
             eventType: PublishEventRequestEventTypeEnum.mcpcatIdentify,
@@ -234,11 +235,30 @@ export function setupToolCallTracing(server: MCPServerLike): void {
           try {
             const identityResult = await data.options.identify(request, extra);
             if (identityResult) {
-              writeToLog(
-                `Identified session ${sessionId} with identity: ${JSON.stringify(identityResult)}`,
+              // Get previous identity for this session
+              const previousIdentity = data.identifiedSessions.get(sessionId);
+
+              // Merge identities (overwrite userId/userName, merge userData)
+              const mergedIdentity = mergeIdentities(
+                previousIdentity,
+                identityResult,
               );
-              data.identifiedSessions.set(sessionId, identityResult);
-              publishEvent(server, identifyEvent);
+
+              // Only publish if identity has changed
+              const hasChanged =
+                !previousIdentity ||
+                !areIdentitiesEqual(previousIdentity, mergedIdentity);
+
+              // Always update the stored identity with the merged version FIRST
+              // so that publishEvent can get the latest identity in sessionInfo
+              data.identifiedSessions.set(sessionId, mergedIdentity);
+
+              if (hasChanged) {
+                writeToLog(
+                  `Identified session ${sessionId} with identity: ${JSON.stringify(mergedIdentity)}`,
+                );
+                publishEvent(server, identifyEvent);
+              }
             } else {
               writeToLog(
                 `Warning: Supplied identify function returned null for session ${sessionId}`,
