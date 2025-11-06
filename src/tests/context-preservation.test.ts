@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { addContextParameterToTool } from "../modules/context-parameters";
 import { RegisteredTool } from "../types";
+import { DEFAULT_CONTEXT_PARAMETER_DESCRIPTION } from "../modules/constants";
 
 describe("Context Parameter Preservation", () => {
   it("should preserve existing context parameter with custom description", () => {
@@ -29,7 +30,7 @@ describe("Context Parameter Preservation", () => {
 
     // It should NOT be replaced with the default description
     expect(result.inputSchema.properties.context.description).not.toBe(
-      "Describe why you are calling this tool and how it fits into your overall task",
+      DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
     );
   });
 
@@ -51,7 +52,7 @@ describe("Context Parameter Preservation", () => {
     // Context should be added with default description
     expect(result.inputSchema.properties.context).toBeDefined();
     expect(result.inputSchema.properties.context.description).toBe(
-      "Describe why you are calling this tool and how it fits into your overall task",
+      DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
     );
   });
 });

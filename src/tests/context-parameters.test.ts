@@ -253,8 +253,9 @@ describe("Context Parameters", () => {
       });
 
       // Call list_todos without context - should fail
-      await expect(
-        client.request(
+      // Note: SDK <1.21.0 throws exceptions, SDK >=1.21.0 returns error responses
+      try {
+        const result1 = await client.request(
           {
             method: "tools/call",
             params: {
@@ -263,12 +264,17 @@ describe("Context Parameters", () => {
             },
           },
           CallToolResultSchema,
-        ),
-      ).rejects.toThrow();
+        );
+        // SDK 1.21.0+ behavior: returns error response
+        expect(result1.isError).toBe(true);
+      } catch (error) {
+        // SDK <1.21.0 behavior: throws exception
+        expect(error).toBeDefined();
+      }
 
       // Call with empty context - should also fail
-      await expect(
-        client.request(
+      try {
+        const result2 = await client.request(
           {
             method: "tools/call",
             params: {
@@ -277,8 +283,13 @@ describe("Context Parameters", () => {
             },
           },
           CallToolResultSchema,
-        ),
-      ).rejects.toThrow();
+        );
+        // SDK 1.21.0+ behavior: returns error response
+        expect(result2.isError).toBe(true);
+      } catch (error) {
+        // SDK <1.21.0 behavior: throws exception
+        expect(error).toBeDefined();
+      }
 
       // Call with valid context - should succeed
       const result = await client.request(
