@@ -12,6 +12,7 @@ import { EventCapture } from "./test-utils";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { getServerTrackingData } from "../modules/internal";
 import { randomUUID } from "node:crypto";
+import { DEFAULT_CONTEXT_PARAMETER_DESCRIPTION } from "../modules/constants";
 
 describe("Report Missing Tool", () => {
   let server: any;
@@ -118,8 +119,7 @@ describe("Report Missing Tool", () => {
       );
       expect(addTodoTool.inputSchema.properties.context).toEqual({
         type: "string",
-        description:
-          "Describe why you are calling this tool and how it fits into your overall task",
+        description: DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
       });
       expect(addTodoTool.inputSchema.required).toContain("context");
     });
