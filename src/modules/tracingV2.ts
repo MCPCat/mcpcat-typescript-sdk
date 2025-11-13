@@ -8,11 +8,7 @@ import {
   CompatibleRequestHandlerExtra,
 } from "../types.js";
 import { writeToLog } from "./logging.js";
-import {
-  getServerTrackingData,
-  areIdentitiesEqual,
-  mergeIdentities,
-} from "./internal.js";
+import { getServerTrackingData, handleIdentify } from "./internal.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
@@ -308,7 +304,7 @@ function addTracingToToolCallback(
             )(cleanedArgs, extra));
       }
 
-      const sessionId = getServerSessionId(lowLevelServer);
+      const sessionId = getServerSessionId(lowLevelServer, extra);
 
       // Create a request-like object for compatibility with existing code
       const request = {
@@ -332,58 +328,10 @@ function addTracingToToolCallback(
 
       try {
         // Try to identify the session if identify function is provided
-        if (data.options.identify) {
-          let identifyEvent: UnredactedEvent = {
-            ...event,
-            eventType: PublishEventRequestEventTypeEnum.mcpcatIdentify,
-          };
-          try {
-            const identityResult = await data.options.identify(request, extra);
-            if (identityResult) {
-              // Get previous identity for this session
-              const previousIdentity = data.identifiedSessions.get(sessionId);
+        await handleIdentify(lowLevelServer, data, request, extra);
 
-              // Merge identities (overwrite userId/userName, merge userData)
-              const mergedIdentity = mergeIdentities(
-                previousIdentity,
-                identityResult,
-              );
-
-              // Only publish if identity has changed
-              const hasChanged =
-                !previousIdentity ||
-                !areIdentitiesEqual(previousIdentity, mergedIdentity);
-
-              // Always update the stored identity with the merged version FIRST
-              // so that publishEvent can get the latest identity in sessionInfo
-              data.identifiedSessions.set(sessionId, mergedIdentity);
-
-              if (hasChanged) {
-                writeToLog(
-                  `Identified session ${sessionId} with identity: ${JSON.stringify(mergedIdentity)}`,
-                );
-                publishEvent(lowLevelServer, identifyEvent);
-              }
-            } else {
-              writeToLog(
-                `Warning: Supplied identify function returned null for session ${sessionId}`,
-              );
-            }
-          } catch (error) {
-            writeToLog(
-              `Warning: Supplied identify function threw an error while identifying session ${sessionId} - ${error}`,
-            );
-            identifyEvent.duration =
-              (identifyEvent.timestamp &&
-                new Date().getTime() - identifyEvent.timestamp.getTime()) ||
-              undefined;
-            identifyEvent.isError = true;
-            identifyEvent.error = {
-              message: getMCPCompatibleErrorMessage(error),
-            };
-            publishEvent(lowLevelServer, identifyEvent);
-          }
-        }
+        // Update event sessionId in case handleIdentify reconnected to a different session
+        event.sessionId = data.sessionId;
 
         // Extract context for userIntent if present
         if (args && typeof args === "object" && "context" in args) {

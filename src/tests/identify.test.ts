@@ -753,7 +753,7 @@ describe("Identify Feature", () => {
   });
 
   describe("Identity Merging Behavior", () => {
-    it("should override userId/userName but merge userData fields", async () => {
+    it("should create separate sessions for different users", async () => {
       const eventCapture = new EventCapture();
       await eventCapture.start();
 
@@ -780,15 +780,15 @@ describe("Identify Feature", () => {
               userId: secondUserId,
               userName: "Bob",
               userData: {
-                department: "Sales", // This should overwrite
-                location: "NYC", // This should be added
+                department: "Sales",
+                location: "NYC",
               },
             };
           }
         },
       });
 
-      // First tool call - sets initial identity
+      // First tool call - sets initial identity for Alice
       await client.request(
         {
           method: "tools/call",
@@ -796,7 +796,7 @@ describe("Identify Feature", () => {
             name: "add_todo",
             arguments: {
               text: "First todo",
-              context: "Testing identity merge",
+              context: "Testing identity separation",
             },
           },
         },
@@ -806,12 +806,12 @@ describe("Identify Feature", () => {
       // Wait for first identify to complete
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Verify first identity was stored
+      // Verify Alice's identity was stored
       const data = getServerTrackingData(server.server);
-      const sessionId = data?.sessionId;
-      let storedIdentity = data?.identifiedSessions.get(sessionId!);
+      const aliceSessionId = data?.sessionId;
+      const aliceIdentity = data?.identifiedSessions.get(aliceSessionId!);
 
-      expect(storedIdentity).toEqual({
+      expect(aliceIdentity).toEqual({
         userId: firstUserId,
         userName: "Alice",
         userData: {
@@ -820,14 +820,14 @@ describe("Identify Feature", () => {
         },
       });
 
-      // Second tool call - should merge identities
+      // Second tool call - Bob should get his own NEW session (not take over Alice's)
       await client.request(
         {
           method: "tools/call",
           params: {
             name: "list_todos",
             arguments: {
-              context: "Testing identity merge again",
+              context: "Testing identity separation again",
             },
           },
         },
@@ -837,20 +837,35 @@ describe("Identify Feature", () => {
       // Wait for second identify to complete
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Verify merged identity
-      storedIdentity = data?.identifiedSessions.get(sessionId!);
+      // Verify Bob got his own session (different from Alice's)
+      const bobSessionId = data?.sessionId;
+      expect(bobSessionId).not.toEqual(aliceSessionId);
 
-      expect(storedIdentity).toEqual({
-        userId: secondUserId, // Overwritten
-        userName: "Bob", // Overwritten
+      // Verify Bob's identity is stored in his own session
+      const bobIdentity = data?.identifiedSessions.get(bobSessionId!);
+      expect(bobIdentity).toEqual({
+        userId: secondUserId,
+        userName: "Bob",
         userData: {
-          role: "admin", // Preserved from first call
-          department: "Sales", // Overwritten from first call
-          location: "NYC", // Added in second call
+          department: "Sales",
+          location: "NYC",
         },
       });
 
-      // Verify two identify events were published (both represent changes)
+      // Verify Alice's session still has her identity (unchanged)
+      const aliceIdentityStillThere = data?.identifiedSessions.get(
+        aliceSessionId!,
+      );
+      expect(aliceIdentityStillThere).toEqual({
+        userId: firstUserId,
+        userName: "Alice",
+        userData: {
+          role: "admin",
+          department: "Engineering",
+        },
+      });
+
+      // Verify two identify events were published (one for each user)
       const events = eventCapture.getEvents();
       const identifyEvents = events.filter(
         (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpcatIdentify,

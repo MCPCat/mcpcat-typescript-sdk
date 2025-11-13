@@ -16,7 +16,10 @@ import { writeToLog } from "./modules/logging.js";
 import { setupMCPCatTools } from "./modules/tools.js";
 import { setupToolCallTracing } from "./modules/tracing.js";
 import { getSessionInfo, newSessionId } from "./modules/session.js";
-import { setServerTrackingData } from "./modules/internal.js";
+import {
+  setServerTrackingData,
+  getServerTrackingData,
+} from "./modules/internal.js";
 import { setupTracking } from "./modules/tracingV2.js";
 import { TelemetryManager } from "./modules/telemetry.js";
 import { setTelemetryManager } from "./modules/eventQueue.js";
@@ -136,6 +139,15 @@ function track(
         : validatedServer
     ) as MCPServerLike;
 
+    // Check if server is already being tracked
+    const existingData = getServerTrackingData(lowLevelServer);
+    if (existingData) {
+      writeToLog(
+        "[SESSION DEBUG] track() - Server already being tracked, skipping initialization",
+      );
+      return validatedServer;
+    }
+
     // Initialize telemetry if exporters are configured
     if (options.exporters) {
       const telemetryManager = new TelemetryManager(options.exporters);
@@ -167,6 +179,7 @@ function track(
         identify: options.identify,
         redactSensitiveInformation: options.redactSensitiveInformation,
       },
+      sessionSource: "mcpcat", // Initially MCPCat-generated, will change to "mcp" if MCP sessionId is provided
     };
 
     setServerTrackingData(lowLevelServer, mcpcatData);
