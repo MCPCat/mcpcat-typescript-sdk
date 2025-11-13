@@ -162,9 +162,11 @@ export interface SessionInfo {
 
 export interface MCPCatData {
   projectId: string; // Project ID for MCPCat
-  sessionId: string; // Unique identifier for the session
+  sessionId: string; // Unique identifier for the session (KSUID with ses prefix)
   lastActivity: Date; // Last activity timestamp
   identifiedSessions: Map<string, UserIdentity>;
   sessionInfo: SessionInfo;
   options: MCPCatOptions;
+  lastMcpSessionId?: string; // Track the last MCP sessionId we saw
+  sessionSource: "mcp" | "mcpcat"; // Track whether session ID came from MCP protocol or MCPCat generation
 }

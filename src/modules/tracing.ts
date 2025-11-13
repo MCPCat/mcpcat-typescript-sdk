@@ -11,11 +11,7 @@ import {
 } from "../types.js";
 import { writeToLog } from "./logging.js";
 import { handleReportMissing } from "./tools.js";
-import {
-  getServerTrackingData,
-  areIdentitiesEqual,
-  mergeIdentities,
-} from "./internal.js";
+import { getServerTrackingData, handleIdentify } from "./internal.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
@@ -25,8 +21,8 @@ function isToolResultError(result: any): boolean {
   return result && typeof result === "object" && result.isError === true;
 }
 
-// Track if we've already set up list tools tracing
-let listToolsTracingSetup = false;
+// Track if we've already set up list tools tracing per server instance
+const listToolsTracingSetup = new WeakMap<MCPServerLike, boolean>();
 
 export function setupListToolsTracing(
   highLevelServer: HighLevelMCPServerLike,
@@ -39,8 +35,8 @@ export function setupListToolsTracing(
     return;
   }
 
-  // Check if we've already set up tracing
-  if (listToolsTracingSetup) {
+  // Check if we've already set up tracing for this server instance
+  if (listToolsTracingSetup.get(server)) {
     return;
   }
 
@@ -57,7 +53,7 @@ export function setupListToolsTracing(
       let tools: any[] = [];
       const data = getServerTrackingData(server);
       let event: UnredactedEvent = {
-        sessionId: getServerSessionId(server),
+        sessionId: getServerSessionId(server, extra),
         parameters: {
           request: request,
           extra: extra,
@@ -117,8 +113,8 @@ export function setupListToolsTracing(
       return { tools };
     });
 
-    // Mark as setup successful
-    listToolsTracingSetup = true;
+    // Mark as setup successful for this server instance
+    listToolsTracingSetup.set(server, true);
   } catch (error) {
     writeToLog(`Warning: Failed to override list tools handler - ${error}`);
   }
@@ -143,7 +139,11 @@ export function setupInitializeTracing(
           return await originalInitializeHandler(request, extra);
         }
 
-        const sessionId = getServerSessionId(server);
+        const sessionId = getServerSessionId(server, extra);
+
+        // Try to identify the session
+        await handleIdentify(server, data, request, extra);
+
         let event: UnredactedEvent = {
           sessionId: sessionId,
           resourceName: request.params?.name || "Unknown Tool Name",
@@ -183,7 +183,11 @@ export function setupToolCallTracing(server: MCPServerLike): void {
             return await originalInitializeHandler(request, extra);
           }
 
-          const sessionId = getServerSessionId(server);
+          const sessionId = getServerSessionId(server, extra);
+
+          // Try to identify the session
+          await handleIdentify(server, data, request, extra);
+
           let event: UnredactedEvent = {
             sessionId: sessionId,
             resourceName: request.params?.name || "Unknown Tool Name",
@@ -212,7 +216,7 @@ export function setupToolCallTracing(server: MCPServerLike): void {
         return await originalCallToolHandler?.(request, extra);
       }
 
-      const sessionId = getServerSessionId(server);
+      const sessionId = getServerSessionId(server, extra);
       let event: UnredactedEvent = {
         sessionId: sessionId,
         resourceName: request.params?.name || "Unknown Tool Name",
@@ -227,58 +231,7 @@ export function setupToolCallTracing(server: MCPServerLike): void {
 
       try {
         // Try to identify the session if we haven't already and identify function is provided
-        if (data.options.identify) {
-          let identifyEvent: UnredactedEvent = {
-            ...event,
-            eventType: PublishEventRequestEventTypeEnum.mcpcatIdentify,
-          };
-          try {
-            const identityResult = await data.options.identify(request, extra);
-            if (identityResult) {
-              // Get previous identity for this session
-              const previousIdentity = data.identifiedSessions.get(sessionId);
-
-              // Merge identities (overwrite userId/userName, merge userData)
-              const mergedIdentity = mergeIdentities(
-                previousIdentity,
-                identityResult,
-              );
-
-              // Only publish if identity has changed
-              const hasChanged =
-                !previousIdentity ||
-                !areIdentitiesEqual(previousIdentity, mergedIdentity);
-
-              // Always update the stored identity with the merged version FIRST
-              // so that publishEvent can get the latest identity in sessionInfo
-              data.identifiedSessions.set(sessionId, mergedIdentity);
-
-              if (hasChanged) {
-                writeToLog(
-                  `Identified session ${sessionId} with identity: ${JSON.stringify(mergedIdentity)}`,
-                );
-                publishEvent(server, identifyEvent);
-              }
-            } else {
-              writeToLog(
-                `Warning: Supplied identify function returned null for session ${sessionId}`,
-              );
-            }
-          } catch (error) {
-            writeToLog(
-              `Warning: Supplied identify function threw an error while identifying session ${sessionId} - ${error}`,
-            );
-            identifyEvent.duration =
-              (identifyEvent.timestamp &&
-                new Date().getTime() - identifyEvent.timestamp.getTime()) ||
-              undefined;
-            identifyEvent.isError = true;
-            identifyEvent.error = {
-              message: getMCPCompatibleErrorMessage(error),
-            };
-            publishEvent(server, identifyEvent);
-          }
-        }
+        await handleIdentify(server, data, request, extra);
 
         // Check for missing context if enableToolCallContext is true and it's not report_missing
         if (
