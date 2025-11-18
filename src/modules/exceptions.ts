@@ -1,4 +1,4 @@
-import { ErrorData, StackFrame, CauseData } from "../types.js";
+import { ErrorData, StackFrame, ChainedErrorData } from "../types.js";
 
 // Maximum number of exceptions to capture in a cause chain
 const MAX_EXCEPTION_CHAIN_DEPTH = 10;
@@ -37,9 +37,9 @@ export function captureException(error: unknown): ErrorData {
   }
 
   // Unwrap Error.cause chain
-  const causes = unwrapErrorCauses(error);
-  if (causes.length > 0) {
-    errorData.causes = causes;
+  const chainedErrors = unwrapErrorCauses(error);
+  if (chainedErrors.length > 0) {
+    errorData.chained_errors = chainedErrors;
   }
 
   return errorData;
@@ -617,7 +617,7 @@ function makeRelativePath(filename: string): string {
 }
 
 /**
- * Recursively unwraps Error.cause chain and returns array of causes.
+ * Recursively unwraps Error.cause chain and returns array of chained errors.
  *
  * Error.cause is a standard JavaScript feature that allows chaining errors:
  *   const cause = new Error("Root cause");
@@ -626,10 +626,10 @@ function makeRelativePath(filename: string): string {
  * This function extracts all errors in the cause chain up to MAX_EXCEPTION_CHAIN_DEPTH.
  *
  * @param error - Error object to unwrap
- * @returns Array of CauseData objects representing the cause chain
+ * @returns Array of ChainedErrorData objects representing the error chain
  */
-function unwrapErrorCauses(error: Error): CauseData[] {
-  const causes: CauseData[] = [];
+function unwrapErrorCauses(error: Error): ChainedErrorData[] {
+  const chainedErrors: ChainedErrorData[] = [];
   const seenErrors = new Set<Error>();
   let currentError: unknown = (error as any).cause;
   let depth = 0;
@@ -637,7 +637,7 @@ function unwrapErrorCauses(error: Error): CauseData[] {
   while (currentError && depth < MAX_EXCEPTION_CHAIN_DEPTH) {
     // If cause is not an Error, stringify it and stop
     if (!(currentError instanceof Error)) {
-      causes.push({
+      chainedErrors.push({
         message: stringifyNonError(currentError),
         type: "NonError",
       });
@@ -650,24 +650,24 @@ function unwrapErrorCauses(error: Error): CauseData[] {
     }
     seenErrors.add(currentError);
 
-    const causeData: CauseData = {
+    const chainedErrorData: ChainedErrorData = {
       message: currentError.message || "",
       type: currentError.name || currentError.constructor?.name || "Error",
     };
 
     if (currentError.stack) {
-      causeData.stack = currentError.stack;
-      causeData.frames = parseV8StackTrace(currentError.stack);
+      chainedErrorData.stack = currentError.stack;
+      chainedErrorData.frames = parseV8StackTrace(currentError.stack);
     }
 
-    causes.push(causeData);
+    chainedErrors.push(chainedErrorData);
 
     // Move to next cause in chain
     currentError = (currentError as any).cause;
     depth++;
   }
 
-  return causes;
+  return chainedErrors;
 }
 
 /**

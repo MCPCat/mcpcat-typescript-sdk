@@ -171,10 +171,10 @@ describe("captureException", () => {
       const result = captureException(error);
 
       expect(result.message).toBe("Wrapper error");
-      expect(result.causes).toBeDefined();
-      expect(result.causes!.length).toBe(1);
-      expect(result.causes![0].message).toBe("Root cause");
-      expect(result.causes![0].type).toBe("Error");
+      expect(result.chained_errors).toBeDefined();
+      expect(result.chained_errors!.length).toBe(1);
+      expect(result.chained_errors![0].message).toBe("Root cause");
+      expect(result.chained_errors![0].type).toBe("Error");
     });
 
     it("should unwrap multiple causes", () => {
@@ -184,10 +184,10 @@ describe("captureException", () => {
 
       const result = captureException(error);
 
-      expect(result.causes).toBeDefined();
-      expect(result.causes!.length).toBe(2);
-      expect(result.causes![0].message).toBe("Middle cause");
-      expect(result.causes![1].message).toBe("Root cause");
+      expect(result.chained_errors).toBeDefined();
+      expect(result.chained_errors!.length).toBe(2);
+      expect(result.chained_errors![0].message).toBe("Middle cause");
+      expect(result.chained_errors![1].message).toBe("Root cause");
     });
 
     it("should limit cause chain to 10", () => {
@@ -199,8 +199,8 @@ describe("captureException", () => {
 
       const result = captureException(error);
 
-      expect(result.causes).toBeDefined();
-      expect(result.causes!.length).toBeLessThanOrEqual(10);
+      expect(result.chained_errors).toBeDefined();
+      expect(result.chained_errors!.length).toBeLessThanOrEqual(10);
     });
 
     it("should handle non-Error causes", () => {
@@ -208,10 +208,10 @@ describe("captureException", () => {
 
       const result = captureException(error);
 
-      expect(result.causes).toBeDefined();
-      expect(result.causes!.length).toBe(1);
-      expect(result.causes![0].message).toBe("string cause");
-      expect(result.causes![0].type).toBe("NonError");
+      expect(result.chained_errors).toBeDefined();
+      expect(result.chained_errors!.length).toBe(1);
+      expect(result.chained_errors![0].message).toBe("string cause");
+      expect(result.chained_errors![0].type).toBe("NonError");
     });
 
     it("should detect circular cause references", () => {
@@ -223,8 +223,8 @@ describe("captureException", () => {
       const result = captureException(error2);
 
       // Should not crash, should stop at circular reference
-      expect(result.causes).toBeDefined();
-      expect(result.causes!.length).toBeLessThanOrEqual(2);
+      expect(result.chained_errors).toBeDefined();
+      expect(result.chained_errors!.length).toBeLessThanOrEqual(2);
     });
 
     it("should capture stack traces for each cause", () => {
@@ -235,8 +235,8 @@ describe("captureException", () => {
 
       expect(result.stack).toBeDefined();
       expect(result.frames).toBeDefined();
-      expect(result.causes![0].stack).toBeDefined();
-      expect(result.causes![0].frames).toBeDefined();
+      expect(result.chained_errors![0].stack).toBeDefined();
+      expect(result.chained_errors![0].frames).toBeDefined();
     });
   });
 

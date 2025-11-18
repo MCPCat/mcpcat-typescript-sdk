@@ -181,7 +181,7 @@ export interface StackFrame {
   abs_path?: string;
 }
 
-export interface CauseData {
+export interface ChainedErrorData {
   message: string;
   type?: string;
   stack?: string;
@@ -193,5 +193,5 @@ export interface ErrorData {
   type?: string; // Error class name (e.g., "TypeError", "Error")
   stack?: string; // Full stack trace string
   frames?: StackFrame[]; // Parsed stack frames
-  causes?: CauseData[];
+  chained_errors?: ChainedErrorData[];
 }

@@ -140,14 +140,16 @@ describe("Error Capture Integration Tests", () => {
       expect(errorEvent!.error!.type).toBe("Error");
 
       // Verify cause chain is captured
-      expect(errorEvent!.error!.causes).toBeDefined();
-      expect(errorEvent!.error!.causes!.length).toBe(1);
-      expect(errorEvent!.error!.causes![0].message).toBe("Root cause error");
-      expect(errorEvent!.error!.causes![0].type).toBe("Error");
+      expect(errorEvent!.error!.chained_errors).toBeDefined();
+      expect(errorEvent!.error!.chained_errors!.length).toBe(1);
+      expect(errorEvent!.error!.chained_errors![0].message).toBe(
+        "Root cause error",
+      );
+      expect(errorEvent!.error!.chained_errors![0].type).toBe("Error");
 
       // Verify cause has its own stack trace
-      expect(errorEvent!.error!.causes![0].stack).toBeDefined();
-      expect(errorEvent!.error!.causes![0].frames).toBeDefined();
+      expect(errorEvent!.error!.chained_errors![0].stack).toBeDefined();
+      expect(errorEvent!.error!.chained_errors![0].frames).toBeDefined();
     } finally {
       await cleanup();
     }
