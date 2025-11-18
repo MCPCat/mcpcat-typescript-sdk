@@ -12,10 +12,10 @@ import { getServerTrackingData, handleIdentify } from "./internal.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
-import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { addContextParameterToTool } from "./context-parameters.js";
 import { handleReportMissing } from "./tools.js";
 import { setupInitializeTracing, setupListToolsTracing } from "./tracing.js";
+import { captureException } from "./exceptions.js";
 
 // WeakMap to track which callbacks have already been wrapped
 const wrappedCallbacks = new WeakMap<Function, boolean>();
@@ -359,9 +359,7 @@ function addTracingToToolCallback(
         // Check if the result indicates an error
         if (isToolResultError(result)) {
           event.isError = true;
-          event.error = {
-            message: getMCPCompatibleErrorMessage(result),
-          };
+          event.error = captureException(result);
         }
 
         event.response = result;
@@ -373,9 +371,7 @@ function addTracingToToolCallback(
         return result;
       } catch (error) {
         event.isError = true;
-        event.error = {
-          message: getMCPCompatibleErrorMessage(error),
-        };
+        event.error = captureException(error);
         event.duration =
           (event.timestamp &&
             new Date().getTime() - event.timestamp.getTime()) ||

@@ -7,9 +7,9 @@ import {
 } from "../types.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
-import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { writeToLog } from "./logging.js";
 import { INACTIVITY_TIMEOUT_IN_MINUTES } from "./constants.js";
+import { captureException } from "./exceptions.js";
 
 /**
  * Simple LRU cache for session identities.
@@ -325,9 +325,7 @@ export async function handleIdentify(
         new Date().getTime() - identifyEvent.timestamp.getTime()) ||
       undefined;
     identifyEvent.isError = true;
-    identifyEvent.error = {
-      message: getMCPCompatibleErrorMessage(error),
-    };
+    identifyEvent.error = captureException(error);
     publishEvent(server, identifyEvent);
   }
 }
