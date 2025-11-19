@@ -179,6 +179,7 @@ export interface StackFrame {
   colno?: number;
   in_app: boolean;
   abs_path?: string;
+  context_line?: string; // The line of code where the error occurred
 }
 
 export interface ChainedErrorData {
@@ -194,4 +195,5 @@ export interface ErrorData {
   stack?: string; // Full stack trace string
   frames?: StackFrame[]; // Parsed stack frames
   chained_errors?: ChainedErrorData[];
+  platform?: string; // Platform identifier (e.g., "javascript", "node")
 }
