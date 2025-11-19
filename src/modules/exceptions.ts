@@ -1,4 +1,5 @@
 import { ErrorData, StackFrame, ChainedErrorData } from "../types.js";
+import { readFileSync } from "fs";
 
 // Maximum number of exceptions to capture in a cause chain
 const MAX_EXCEPTION_CHAIN_DEPTH = 10;
@@ -22,12 +23,14 @@ export function captureException(error: unknown): ErrorData {
     return {
       message: stringifyNonError(error),
       type: "NonError",
+      platform: "javascript",
     };
   }
 
   const errorData: ErrorData = {
     message: error.message || "",
     type: error.name || error.constructor?.name || "Error",
+    platform: "javascript",
   };
 
   // Capture stack trace if available
@@ -76,6 +79,7 @@ function parseV8StackTrace(stackTrace: string): StackFrame[] {
 
     const frame = parseV8StackFrame(line.trim());
     if (frame) {
+      addContextToFrame(frame);
       frames.push(frame);
     }
 
@@ -86,6 +90,40 @@ function parseV8StackTrace(stackTrace: string): StackFrame[] {
   }
 
   return frames;
+}
+
+/**
+ * Adds context_line to a stack frame by reading the source file.
+ *
+ * This function extracts the line of code where the error occurred by:
+ * 1. Reading the source file using abs_path
+ * 2. Extracting the line at the specified line number
+ * 3. Setting the context_line field on the frame
+ *
+ * Only extracts context for user code (in_app: true)
+ * If the file cannot be read or the line number is invalid, context_line remains undefined.
+ *
+ * @param frame - The StackFrame to add context to (modified in place)
+ * @returns The modified StackFrame
+ */
+function addContextToFrame(frame: StackFrame): StackFrame {
+  if (!frame.in_app || !frame.abs_path || !frame.lineno) {
+    return frame;
+  }
+
+  try {
+    const source = readFileSync(frame.abs_path, "utf8");
+    const lines = source.split("\n");
+    const lineIndex = frame.lineno - 1; // Convert to 0-based index
+
+    if (lineIndex >= 0 && lineIndex < lines.length) {
+      frame.context_line = lines[lineIndex];
+    }
+  } catch {
+    // File not found or not readable - silently skip
+  }
+
+  return frame;
 }
 
 /**

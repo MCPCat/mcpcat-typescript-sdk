@@ -44,6 +44,19 @@ describe("captureException", () => {
       expect(result.message).toBe("Custom error message");
       expect(result.type).toBe("CustomError");
     });
+
+    it("should always set platform to 'javascript'", () => {
+      const error = new Error("Test error");
+      const result = captureException(error);
+
+      expect(result.platform).toBe("javascript");
+    });
+
+    it("should set platform to 'javascript' for non-Error objects", () => {
+      const result = captureException("string error");
+
+      expect(result.platform).toBe("javascript");
+    });
   });
 
   describe("stack trace parsing", () => {
@@ -160,6 +173,54 @@ describe("captureException", () => {
 
       expect(result.frames).toBeDefined();
       expect(result.frames!.length).toBeLessThanOrEqual(50);
+    });
+
+    it("should capture context_line for in_app frames", () => {
+      // This test throws a real error, so context_line should be captured
+      const error = new Error("Test error");
+      const result = captureException(error);
+
+      expect(result.frames).toBeDefined();
+      const inAppFrames = result.frames!.filter((frame) => frame.in_app);
+      expect(inAppFrames.length).toBeGreaterThan(0);
+
+      // At least one in_app frame should have context_line
+      const hasContextLine = inAppFrames.some(
+        (frame) => frame.context_line !== undefined,
+      );
+      expect(hasContextLine).toBe(true);
+    });
+
+    it("should NOT capture context_line for library code (in_app: false)", () => {
+      // Create a mock stack trace with node_modules
+      const error = new Error("Test");
+      error.stack = `Error: Test
+    at libFunction (/app/node_modules/some-lib/index.js:42:10)
+    at internal (node:internal/process:123:45)`;
+
+      const result = captureException(error);
+
+      expect(result.frames).toBeDefined();
+      // All frames should be library code and should NOT have context_line
+      result.frames!.forEach((frame) => {
+        expect(frame.in_app).toBe(false);
+        expect(frame.context_line).toBeUndefined();
+      });
+    });
+
+    it("should handle missing files gracefully when extracting context_line", () => {
+      // Create a mock stack trace with a non-existent file
+      const error = new Error("Test");
+      error.stack = `Error: Test
+    at testFunction (/nonexistent/file/path.ts:10:5)`;
+
+      const result = captureException(error);
+
+      expect(result.frames).toBeDefined();
+      expect(result.frames!.length).toBe(1);
+      // Frame should be in_app but context_line should be undefined (file not found)
+      expect(result.frames![0].in_app).toBe(true);
+      expect(result.frames![0].context_line).toBeUndefined();
     });
   });
 
