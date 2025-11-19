@@ -64,7 +64,10 @@ export function setupMCPCatTools(server: MCPServerLike): void {
         writeToLog(
           `Warning: Original list tools handler failed, this suggests an error MCPCat did not cause - ${error}`,
         );
-        event.error = { message: getMCPCompatibleErrorMessage(error) };
+        event.error = {
+          message: getMCPCompatibleErrorMessage(error),
+          platform: "javascript",
+        };
         event.isError = true;
         event.duration =
           (event.timestamp &&
@@ -85,7 +88,10 @@ export function setupMCPCatTools(server: MCPServerLike): void {
         writeToLog(
           "Warning: No tools found in the original list. This is likely due to the tools not being registered before MCPCat.track().",
         );
-        event.error = { message: "No tools were sent to MCP client." };
+        event.error = {
+          message: "No tools were sent to MCP client.",
+          platform: "javascript",
+        };
         event.isError = true;
         event.duration =
           (event.timestamp &&

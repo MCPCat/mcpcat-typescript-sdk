@@ -74,7 +74,10 @@ export function setupListToolsTracing(
         writeToLog(
           `Warning: Original list tools handler failed, this suggests an error MCPCat did not cause - ${error}`,
         );
-        event.error = { message: getMCPCompatibleErrorMessage(error) };
+        event.error = {
+          message: getMCPCompatibleErrorMessage(error),
+          platform: "javascript",
+        };
         event.isError = true;
         event.duration =
           (event.timestamp &&
@@ -95,7 +98,10 @@ export function setupListToolsTracing(
         writeToLog(
           "Warning: No tools found in the original list. This is likely due to the tools not being registered before MCPCat.track().",
         );
-        event.error = { message: "No tools were sent to MCP client." };
+        event.error = {
+          message: "No tools were sent to MCP client.",
+          platform: "javascript",
+        };
         event.isError = true;
         event.duration =
           (event.timestamp &&
@@ -258,6 +264,7 @@ export function setupToolCallTracing(server: MCPServerLike): void {
           event.isError = true;
           event.error = {
             message: `Tool call handler not found for ${request.params?.name || "unknown"}`,
+            platform: "javascript",
           };
           event.duration =
             (event.timestamp &&
