@@ -411,8 +411,6 @@ export class SentryExporter implements Exporter {
       } else if (typeof event.error === "object" && event.error !== null) {
         if ("message" in event.error) {
           errorMessage = String(event.error.message);
-        } else if ("error" in event.error) {
-          errorMessage = String(event.error.error);
         } else {
           errorMessage = JSON.stringify(event.error);
         }

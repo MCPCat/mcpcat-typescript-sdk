@@ -78,7 +78,7 @@ export interface Event {
 
   // Error tracking
   isError?: boolean;
-  error?: object;
+  error?: ErrorData;
 
   // Legacy fields for MCPCat API compatibility
   actorId?: string; // Maps to identifyActorGivenId in some contexts
@@ -169,4 +169,29 @@ export interface MCPCatData {
   options: MCPCatOptions;
   lastMcpSessionId?: string; // Track the last MCP sessionId we saw
   sessionSource: "mcp" | "mcpcat"; // Track whether session ID came from MCP protocol or MCPCat generation
+}
+
+// Error tracking types
+export interface StackFrame {
+  filename: string;
+  function: string; // Function name or "<anonymous>"
+  lineno?: number;
+  colno?: number;
+  in_app: boolean;
+  abs_path?: string;
+}
+
+export interface ChainedErrorData {
+  message: string;
+  type?: string;
+  stack?: string;
+  frames?: StackFrame[];
+}
+
+export interface ErrorData {
+  message: string;
+  type?: string; // Error class name (e.g., "TypeError", "Error")
+  stack?: string; // Full stack trace string
+  frames?: StackFrame[]; // Parsed stack frames
+  chained_errors?: ChainedErrorData[];
 }

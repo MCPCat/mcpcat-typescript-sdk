@@ -16,6 +16,7 @@ import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
+import { captureException } from "./exceptions.js";
 
 function isToolResultError(result: any): boolean {
   return result && typeof result === "object" && result.isError === true;
@@ -269,9 +270,7 @@ export function setupToolCallTracing(server: MCPServerLike): void {
         // Check if the result indicates an error
         if (isToolResultError(result)) {
           event.isError = true;
-          event.error = {
-            message: getMCPCompatibleErrorMessage(result),
-          };
+          event.error = captureException(result);
         }
 
         event.response = result;
@@ -279,9 +278,7 @@ export function setupToolCallTracing(server: MCPServerLike): void {
         return result;
       } catch (error) {
         event.isError = true;
-        event.error = {
-          message: getMCPCompatibleErrorMessage(error),
-        };
+        event.error = captureException(error);
         publishEvent(server, event);
         throw error;
       }
