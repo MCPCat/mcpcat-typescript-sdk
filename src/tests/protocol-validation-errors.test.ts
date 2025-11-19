@@ -145,7 +145,7 @@ describe("Protocol Validation Error Tests", () => {
         expect.fail("Should have thrown tool not found error");
       } catch (error: any) {
         console.log("Caught tool not found error:", error.message);
-        expect(error.message).toContain("Unknown tool");
+        expect(error.message).toContain("Tool nonexistent_tool not found");
       }
 
       await new Promise((resolve) => setTimeout(resolve, 200));
