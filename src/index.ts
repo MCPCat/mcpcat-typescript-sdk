@@ -190,7 +190,7 @@ function track(
         identify: options.identify,
         redactSensitiveInformation: options.redactSensitiveInformation,
       },
-      sessionSource: "mcpcat", // Initially MCPCat-generated, will change to "mcp" if MCP sessionId is provided
+      sessionSource: "mcpcat", // Initially MCPCat-generated, will change to "mcp" if MCP sessionId is provided in requests
     };
 
     setServerTrackingData(lowLevelServer, mcpcatData);
