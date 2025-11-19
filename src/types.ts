@@ -195,5 +195,5 @@ export interface ErrorData {
   stack?: string; // Full stack trace string
   frames?: StackFrame[]; // Parsed stack frames
   chained_errors?: ChainedErrorData[];
-  platform: string; // Platform identifier (e.g., "javascript", "node")
+  platform?: string; // Platform identifier (e.g., "javascript", "node")
 }
