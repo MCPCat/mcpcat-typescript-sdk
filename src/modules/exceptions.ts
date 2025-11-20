@@ -31,7 +31,7 @@ export function captureException(
   if (!(error instanceof Error)) {
     return {
       message: stringifyNonError(error),
-      type: "NonError",
+      type: "UnknownErrorType",
       platform: "javascript",
     };
   }
@@ -686,7 +686,7 @@ function unwrapErrorCauses(error: Error): ChainedErrorData[] {
     if (!(currentError instanceof Error)) {
       chainedErrors.push({
         message: stringifyNonError(currentError),
-        type: "NonError",
+        type: "UnknownErrorType",
       });
       break;
     }
@@ -760,7 +760,7 @@ function captureCallToolResultError(
 
   const errorData: ErrorData = {
     message,
-    type: "NonError", // Can't determine actual type from CallToolResult
+    type: "UnknownErrorType", // Can't determine actual type from CallToolResult
     platform: "javascript",
     // No stack or frames - SDK stripped the original error information
   };
