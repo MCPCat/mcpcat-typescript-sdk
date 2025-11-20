@@ -281,20 +281,30 @@ function addTracingToToolCallback(
     const cleanedArgs =
       toolName === "get_more_tools" ? args : removeContextFromArgs(args);
 
-    // Call original callback with cleaned args
-    if (cleanedArgs === undefined) {
-      return await (
-        originalCallback as (
-          extra: CompatibleRequestHandlerExtra,
-        ) => Promise<CallToolResult>
-      )(extra);
-    } else {
-      return await (
-        originalCallback as (
-          args: any,
-          extra: CompatibleRequestHandlerExtra,
-        ) => Promise<CallToolResult>
-      )(cleanedArgs, extra);
+    // Call original callback with cleaned args, capturing any errors
+    try {
+      if (cleanedArgs === undefined) {
+        return await (
+          originalCallback as (
+            extra: CompatibleRequestHandlerExtra,
+          ) => Promise<CallToolResult>
+        )(extra);
+      } else {
+        return await (
+          originalCallback as (
+            args: any,
+            extra: CompatibleRequestHandlerExtra,
+          ) => Promise<CallToolResult>
+        )(cleanedArgs, extra);
+      }
+    } catch (error) {
+      // Store original error for handler to use
+      if (error instanceof Error) {
+        (extra as any).__mcpcat_error = error;
+      }
+
+      // Re-throw so SDK can process it normally
+      throw error;
     }
   };
 
@@ -407,7 +417,18 @@ function createToolsCallWrapper(
         // Check for execution errors (SDK converts them to CallToolResult)
         if (isToolResultError(result)) {
           event.isError = true;
-          event.error = captureException(result);
+
+          // Check if callback captured the original error (has full stack)
+          const capturedError = (extra as any).__mcpcat_error;
+
+          if (capturedError) {
+            // Use captured error from callback
+            event.error = captureException(capturedError);
+            delete (extra as any).__mcpcat_error; // Cleanup
+          } else {
+            // SDK 1.21.0+ converted error (no stack trace available)
+            event.error = captureException(result);
+          }
         }
 
         event.response = result;
