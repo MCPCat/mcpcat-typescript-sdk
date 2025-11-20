@@ -233,10 +233,9 @@ function addMCPcatToolsToServer(server: HighLevelMCPServerLike): void {
 function addTracingToToolCallback(
   tool: RegisteredTool,
   toolName: string,
-  server: HighLevelMCPServerLike,
+  _server: HighLevelMCPServerLike,
 ): RegisteredTool {
   const originalCallback = tool.callback;
-  const lowLevelServer = server.server as MCPServerLike;
 
   // Check if this callback has already been wrapped
   if (wrappedCallbacks.has(originalCallback)) {
@@ -277,131 +276,25 @@ function addTracingToToolCallback(
       return args;
     };
 
-    try {
-      const data = getServerTrackingData(lowLevelServer);
-      if (!data) {
-        writeToLog(
-          "Warning: MCPCat is unable to find server tracking data. Please ensure you have called track(server, options) before using tool calls.",
-        );
+    // Remove context from args before calling original callback
+    // BUT keep it for get_more_tools since it's a required parameter
+    const cleanedArgs =
+      toolName === "get_more_tools" ? args : removeContextFromArgs(args);
 
-        // Remove context from args before calling original callback
-        // BUT keep it for get_more_tools since it's a required parameter
-        const cleanedArgs =
-          toolName === "get_more_tools" ? args : removeContextFromArgs(args);
-
-        // Call with original params
-        return await (cleanedArgs === undefined
-          ? (
-              originalCallback as (
-                extra: CompatibleRequestHandlerExtra,
-              ) => Promise<CallToolResult>
-            )(extra)
-          : (
-              originalCallback as (
-                args: any,
-                extra: CompatibleRequestHandlerExtra,
-              ) => Promise<CallToolResult>
-            )(cleanedArgs, extra));
-      }
-
-      const sessionId = getServerSessionId(lowLevelServer, extra);
-
-      // Create a request-like object for compatibility with existing code
-      const request = {
-        params: {
-          name: toolName,
-          arguments: args,
-        },
-      };
-
-      let event: UnredactedEvent = {
-        sessionId: sessionId,
-        resourceName: toolName,
-        parameters: {
-          request: request,
-          extra: extra,
-        },
-        eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
-        timestamp: new Date(),
-        redactionFn: data.options.redactSensitiveInformation,
-      };
-
-      try {
-        // Try to identify the session if identify function is provided
-        await handleIdentify(lowLevelServer, data, request, extra);
-
-        // Update event sessionId in case handleIdentify reconnected to a different session
-        event.sessionId = data.sessionId;
-
-        // Extract context for userIntent if present
-        if (args && typeof args === "object" && "context" in args) {
-          event.userIntent = args.context;
-        }
-
-        // Remove context from args before calling original callback
-        // BUT keep it for get_more_tools since it's a required parameter
-        const cleanedArgs =
-          toolName === "get_more_tools" ? args : removeContextFromArgs(args);
-
-        let result = await (cleanedArgs === undefined
-          ? (
-              originalCallback as (
-                extra: CompatibleRequestHandlerExtra,
-              ) => Promise<CallToolResult>
-            )(extra)
-          : (
-              originalCallback as (
-                args: any,
-                extra: CompatibleRequestHandlerExtra,
-              ) => Promise<CallToolResult>
-            )(cleanedArgs, extra));
-
-        // Check if the result indicates an error
-        if (isToolResultError(result)) {
-          event.isError = true;
-          event.error = captureException(result);
-        }
-
-        event.response = result;
-        event.duration =
-          (event.timestamp &&
-            new Date().getTime() - event.timestamp.getTime()) ||
-          undefined;
-        publishEvent(lowLevelServer, event);
-        return result;
-      } catch (error) {
-        event.isError = true;
-        event.error = captureException(error);
-        event.duration =
-          (event.timestamp &&
-            new Date().getTime() - event.timestamp.getTime()) ||
-          undefined;
-        publishEvent(lowLevelServer, event);
-        throw error;
-      }
-    } catch (error) {
-      // If any error occurs in our tracing code, log it and call the original callback
-      writeToLog(
-        `Warning: MCPCat tracing failed for tool ${toolName}, falling back to original callback - ${error}`,
-      );
-
-      // Remove context from args before calling original callback
-      // BUT keep it for get_more_tools since it's a required parameter
-      const cleanedArgs =
-        toolName === "get_more_tools" ? args : removeContextFromArgs(args);
-
-      return await (cleanedArgs === undefined
-        ? (
-            originalCallback as (
-              extra: CompatibleRequestHandlerExtra,
-            ) => Promise<CallToolResult>
-          )(extra)
-        : (
-            originalCallback as (
-              args: any,
-              extra: CompatibleRequestHandlerExtra,
-            ) => Promise<CallToolResult>
-          )(cleanedArgs, extra));
+    // Call original callback with cleaned args
+    if (cleanedArgs === undefined) {
+      return await (
+        originalCallback as (
+          extra: CompatibleRequestHandlerExtra,
+        ) => Promise<CallToolResult>
+      )(extra);
+    } else {
+      return await (
+        originalCallback as (
+          args: any,
+          extra: CompatibleRequestHandlerExtra,
+        ) => Promise<CallToolResult>
+      )(cleanedArgs, extra);
     }
   };
 
@@ -423,9 +316,127 @@ function addTracingToToolCallback(
   return wrappedTool;
 }
 
+function setupToolsCallHandlerWrapping(server: HighLevelMCPServerLike): void {
+  const lowLevelServer = server.server as MCPServerLike;
+
+  // Check if tools/call handler already exists
+  const existingHandler = lowLevelServer._requestHandlers.get("tools/call");
+  if (existingHandler) {
+    const wrappedHandler = createToolsCallWrapper(
+      existingHandler,
+      lowLevelServer,
+    );
+    lowLevelServer._requestHandlers.set("tools/call", wrappedHandler);
+  }
+
+  // Intercept future calls to setRequestHandler for tools registered after track()
+  const originalSetRequestHandler =
+    lowLevelServer.setRequestHandler.bind(lowLevelServer);
+
+  lowLevelServer.setRequestHandler = function (
+    requestSchema: any,
+    handler: any,
+  ) {
+    const method = requestSchema?.shape?.method?.value;
+
+    // Only wrap tools/call handler
+    if (method === "tools/call") {
+      const wrappedHandler = createToolsCallWrapper(handler, lowLevelServer);
+      return originalSetRequestHandler(requestSchema, wrappedHandler);
+    }
+
+    // Pass through all other handlers unchanged
+    return originalSetRequestHandler(requestSchema, handler);
+  } as any;
+}
+
+function createToolsCallWrapper(
+  originalHandler: any,
+  server: MCPServerLike,
+): any {
+  return async (request: any, extra: any) => {
+    const startTime = new Date();
+    let shouldPublishEvent = false;
+    let event: UnredactedEvent | null = null;
+
+    try {
+      const data = getServerTrackingData(server);
+
+      if (!data) {
+        writeToLog(
+          "Warning: MCPCat is unable to find server tracking data. Please ensure you have called track(server, options) before using tool calls.",
+        );
+      } else {
+        shouldPublishEvent = true;
+
+        const sessionId = getServerSessionId(server, extra);
+
+        event = {
+          sessionId,
+          resourceName: request.params?.name || "Unknown Tool",
+          parameters: { request, extra },
+          eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
+          timestamp: startTime,
+          redactionFn: data.options.redactSensitiveInformation,
+        };
+
+        // Identify user session
+        await handleIdentify(server, data, request, extra);
+        event.sessionId = data.sessionId;
+
+        // Extract context for userIntent
+        if (
+          data.options.enableToolCallContext &&
+          request.params?.arguments?.context
+        ) {
+          event.userIntent = request.params.arguments.context;
+        }
+      }
+    } catch (error) {
+      // If tracing setup fails, log it but continue with tool execution
+      writeToLog(
+        `Warning: MCPCat tracing failed for tool ${request.params?.name}, falling back to original handler - ${error}`,
+      );
+    }
+
+    // Execute the tool (this should always happen, even if tracing setup failed)
+    try {
+      const result = await originalHandler(request, extra);
+
+      if (event && shouldPublishEvent) {
+        // Check for execution errors (SDK converts them to CallToolResult)
+        if (isToolResultError(result)) {
+          event.isError = true;
+          event.error = captureException(result);
+        }
+
+        event.response = result;
+        event.duration = new Date().getTime() - startTime.getTime();
+        publishEvent(server, event);
+      }
+
+      return result;
+    } catch (error) {
+      // Validation errors, unknown tool, disabled tool
+      if (event && shouldPublishEvent) {
+        event.isError = true;
+        event.error = captureException(error);
+        event.duration = new Date().getTime() - startTime.getTime();
+        publishEvent(server, event);
+      }
+
+      // Re-throw so Protocol converts to JSONRPC error response
+      throw error;
+    }
+  };
+}
+
 export function setupTracking(server: HighLevelMCPServerLike): void {
   try {
     const mcpcatData = getServerTrackingData(server.server);
+
+    // Setup handler wrapping before any tools are registered
+    setupToolsCallHandlerWrapping(server);
 
     setupInitializeTracing(server);
     // Modify existing tools to include context parameters in their inputSchemas
