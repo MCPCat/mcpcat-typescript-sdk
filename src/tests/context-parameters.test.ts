@@ -315,7 +315,8 @@ describe("Context Parameters", () => {
       const listEvent = events.find(
         (e) =>
           e.eventType === PublishEventRequestEventTypeEnum.mcpToolsCall &&
-          e.resourceName === "list_todos",
+          e.resourceName === "list_todos" &&
+          !e.isError, // Find the successful event, not the validation errors
       );
 
       expect(listEvent).toBeDefined();
@@ -395,6 +396,70 @@ describe("Context Parameters", () => {
           DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
         );
       });
+    });
+
+    it("should remove context parameter before calling tool callback", async () => {
+      // Variable to capture what arguments the tool callback actually receives
+      let capturedCallbackArguments: any = null;
+
+      // Register a test tool that captures its arguments
+      const { z } = await import("zod");
+      server.tool(
+        "test_context_removal",
+        "Test tool that captures callback arguments",
+        {
+          testParam: z.string().describe("A test parameter"),
+        },
+        async (args: any) => {
+          // Capture exactly what arguments this callback receives
+          capturedCallbackArguments = { ...args };
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Arguments captured",
+              },
+            ],
+          };
+        },
+      );
+
+      // Enable tracking with context parameters
+      await track(server, {
+        projectId: "test-project",
+        enableTracing: true,
+      });
+
+      // Call the test tool WITH context parameter
+      const result = await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "test_context_removal",
+            arguments: {
+              testParam: "test-value",
+              context: "This context should be removed before callback",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      // Wait for processing
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // The tool call should succeed (successful calls have undefined isError)
+      expect(result).toBeDefined();
+      expect(result.isError).not.toBe(true);
+
+      // Verify that the callback received the testParam
+      expect(capturedCallbackArguments).not.toBeNull();
+      expect(capturedCallbackArguments).toHaveProperty("testParam");
+      expect(capturedCallbackArguments.testParam).toBe("test-value");
+
+      // This is the key assertion: context should NOT be in the arguments
+      // that the tool callback received (it should have been removed by the wrapper)
+      expect(capturedCallbackArguments).not.toHaveProperty("context");
     });
   });
 });

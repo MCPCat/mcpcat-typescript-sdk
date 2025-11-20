@@ -272,7 +272,7 @@ describe("captureException", () => {
       expect(result.chained_errors).toBeDefined();
       expect(result.chained_errors!.length).toBe(1);
       expect(result.chained_errors![0].message).toBe("string cause");
-      expect(result.chained_errors![0].type).toBe("NonError");
+      expect(result.chained_errors![0].type).toBe("UnknownErrorType");
     });
 
     it("should detect circular cause references", () => {
@@ -306,7 +306,7 @@ describe("captureException", () => {
       const result = captureException("string error");
 
       expect(result.message).toBe("string error");
-      expect(result.type).toBe("NonError");
+      expect(result.type).toBe("UnknownErrorType");
       expect(result.stack).toBeUndefined();
       expect(result.frames).toBeUndefined();
     });
@@ -315,35 +315,35 @@ describe("captureException", () => {
       const result = captureException(42);
 
       expect(result.message).toBe("42");
-      expect(result.type).toBe("NonError");
+      expect(result.type).toBe("UnknownErrorType");
     });
 
     it("should handle boolean errors", () => {
       const result = captureException(false);
 
       expect(result.message).toBe("false");
-      expect(result.type).toBe("NonError");
+      expect(result.type).toBe("UnknownErrorType");
     });
 
     it("should handle null", () => {
       const result = captureException(null);
 
       expect(result.message).toBe("null");
-      expect(result.type).toBe("NonError");
+      expect(result.type).toBe("UnknownErrorType");
     });
 
     it("should handle undefined", () => {
       const result = captureException(undefined);
 
       expect(result.message).toBe("undefined");
-      expect(result.type).toBe("NonError");
+      expect(result.type).toBe("UnknownErrorType");
     });
 
     it("should handle object errors", () => {
       const result = captureException({ code: 404, message: "Not found" });
 
       expect(result.message).toBe('{"code":404,"message":"Not found"}');
-      expect(result.type).toBe("NonError");
+      expect(result.type).toBe("UnknownErrorType");
     });
 
     it("should handle objects with circular references", () => {
@@ -352,7 +352,7 @@ describe("captureException", () => {
 
       const result = captureException(obj);
 
-      expect(result.type).toBe("NonError");
+      expect(result.type).toBe("UnknownErrorType");
       // Should not throw, should return some string representation
       expect(typeof result.message).toBe("string");
     });
