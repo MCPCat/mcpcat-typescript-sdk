@@ -197,3 +197,14 @@ export interface ErrorData {
   chained_errors?: ChainedErrorData[];
   platform?: string; // Platform identifier (e.g., "javascript", "node")
 }
+
+// Custom event types for publishCustomEvent function
+export interface CustomEventData {
+  resourceName?: string;
+  parameters?: any;
+  response?: any;
+  message?: string;
+  duration?: number;
+  isError?: boolean;
+  error?: any;
+}

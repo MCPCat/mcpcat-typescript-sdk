@@ -5,6 +5,8 @@ import {
   UserIdentity,
   MCPServerLike,
   HighLevelMCPServerLike,
+  CustomEventData,
+  UnredactedEvent,
 } from "./types.js";
 
 // Import from modules
@@ -15,14 +17,23 @@ import {
 import { writeToLog } from "./modules/logging.js";
 import { setupMCPCatTools } from "./modules/tools.js";
 import { setupToolCallTracing } from "./modules/tracing.js";
-import { getSessionInfo, newSessionId } from "./modules/session.js";
+import {
+  getSessionInfo,
+  newSessionId,
+  deriveSessionIdFromMCPSession,
+} from "./modules/session.js";
 import {
   setServerTrackingData,
   getServerTrackingData,
 } from "./modules/internal.js";
 import { setupTracking } from "./modules/tracingV2.js";
 import { TelemetryManager } from "./modules/telemetry.js";
-import { setTelemetryManager } from "./modules/eventQueue.js";
+import {
+  setTelemetryManager,
+  publishEvent as publishEventToQueue,
+} from "./modules/eventQueue.js";
+import { MCPCAT_CUSTOM_EVENT_TYPE } from "./modules/constants.js";
+import { eventQueue } from "./modules/eventQueue.js";
 
 /**
  * Integrates MCPCat analytics into an MCP server to track tool usage patterns and user interactions.
@@ -212,12 +223,138 @@ function track(
   }
 }
 
+/**
+ * Publishes a custom event to MCPCat with flexible session management.
+ *
+ * @param serverOrSessionId - Either a tracked MCP server instance or a MCP session ID string
+ * @param projectId - Your MCPCat project ID (required)
+ * @param eventData - Optional event data to include with the custom event
+ *
+ * @returns Promise that resolves when the event is queued for publishing
+ *
+ * @example
+ * ```typescript
+ * // With a tracked server
+ * await mcpcat.publishCustomEvent(
+ *   server,
+ *   "proj_abc123xyz",
+ *   {
+ *     resourceName: "custom-action",
+ *     parameters: { action: "user-feedback", rating: 5 },
+ *     message: "User provided feedback"
+ *   }
+ * );
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // With a MCP session ID
+ * await mcpcat.publishCustomEvent(
+ *   "user-session-12345",
+ *   "proj_abc123xyz",
+ *   {
+ *     isError: true,
+ *     error: { message: "Custom error occurred", code: "ERR_001" }
+ *   }
+ * );
+ * ```
+ *
+ * @example
+ * ```typescript
+ * await mcpcat.publishCustomEvent(
+ *   server,
+ *   "proj_abc123xyz",
+ *   {
+ *     resourceName: "feature-usage",
+ *   }
+ * );
+ * ```
+ */
+export async function publishCustomEvent(
+  serverOrSessionId: any | string,
+  projectId: string,
+  eventData?: CustomEventData,
+): Promise<void> {
+  // Validate required parameters
+  if (!projectId) {
+    throw new Error("projectId is required for publishCustomEvent");
+  }
+
+  let sessionId: string;
+
+  // Determine if the first parameter is a tracked server or a session ID string
+  const isServer =
+    typeof serverOrSessionId === "object" && serverOrSessionId !== null;
+  let lowLevelServer: MCPServerLike | null = null;
+
+  if (isServer) {
+    // Try to get tracking data for the server
+    lowLevelServer = serverOrSessionId.server
+      ? serverOrSessionId.server
+      : serverOrSessionId;
+    const trackingData = getServerTrackingData(lowLevelServer as MCPServerLike);
+
+    if (trackingData) {
+      // Use the tracked server's session ID and configuration
+      sessionId = trackingData.sessionId;
+    } else {
+      // Server is not tracked - treat it as an error
+      throw new Error(
+        "Server is not tracked. Please call mcpcat.track() first or provide a session ID string.",
+      );
+    }
+  } else if (typeof serverOrSessionId === "string") {
+    // Custom session ID provided - derive a deterministic session ID
+    sessionId = deriveSessionIdFromMCPSession(serverOrSessionId, projectId);
+  } else {
+    throw new Error(
+      "First parameter must be either an MCP server object or a session ID string",
+    );
+  }
+
+  // Build the event object
+  const event: UnredactedEvent = {
+    // Core fields
+    sessionId,
+    projectId,
+
+    // Fixed event type for custom events
+    eventType: MCPCAT_CUSTOM_EVENT_TYPE,
+
+    // Timestamp
+    timestamp: new Date(),
+
+    // Event data from parameters
+    resourceName: eventData?.resourceName,
+    parameters: eventData?.parameters,
+    response: eventData?.response,
+    userIntent: eventData?.message,
+    duration: eventData?.duration,
+    isError: eventData?.isError,
+    error: eventData?.error,
+  };
+
+  // If we have a tracked server, use the publishEvent function
+  // Otherwise, add directly to the event queue
+  if (lowLevelServer && getServerTrackingData(lowLevelServer)) {
+    publishEventToQueue(lowLevelServer, event);
+  } else {
+    // For custom sessions, we need to import and use the event queue directly
+    eventQueue.add(event);
+  }
+
+  writeToLog(
+    `Published custom event for session ${sessionId} with type 'mcpcat:custom'`,
+  );
+}
+
 export type {
   MCPCatOptions,
   UserIdentity,
   RedactFunction,
   ExporterConfig,
   Exporter,
+  CustomEventData,
 } from "./types.js";
 
 export type IdentifyFunction = MCPCatOptions["identify"];
