@@ -15,21 +15,30 @@ const MAX_STACK_FRAMES = 50;
  * detects whether each frame is user code (in_app: true) or library code (in_app: false).
  *
  * @param error - The error to capture (can be Error, string, object, or any value)
+ * @param contextStack - Optional Error object to use for stack context (for validation errors)
  * @returns ErrorData object with structured error information
  */
-export function captureException(error: unknown): ErrorData {
+export function captureException(
+  error: unknown,
+  contextStack?: Error,
+): ErrorData {
+  // Handle CallToolResult objects (SDK 1.21.0+ converts errors to these)
+  if (isCallToolResult(error)) {
+    return captureCallToolResultError(error, contextStack);
+  }
+
   // Handle non-Error objects
   if (!(error instanceof Error)) {
     return {
       message: stringifyNonError(error),
-      type: "NonError",
+      type: undefined,
       platform: "javascript",
     };
   }
 
   const errorData: ErrorData = {
     message: error.message || "",
-    type: error.name || error.constructor?.name || "Error",
+    type: error.name || error.constructor?.name || undefined,
     platform: "javascript",
   };
 
@@ -677,7 +686,7 @@ function unwrapErrorCauses(error: Error): ChainedErrorData[] {
     if (!(currentError instanceof Error)) {
       chainedErrors.push({
         message: stringifyNonError(currentError),
-        type: "NonError",
+        type: "UnknownErrorType",
       });
       break;
     }
@@ -706,6 +715,57 @@ function unwrapErrorCauses(error: Error): ChainedErrorData[] {
   }
 
   return chainedErrors;
+}
+
+/**
+ * Detects if a value is a CallToolResult object (SDK 1.21.0+ error format).
+ *
+ * SDK 1.21.0+ converts errors to CallToolResult format:
+ * { content: [{ type: "text", text: "error message" }], isError: true }
+ *
+ * @param value - Value to check
+ * @returns True if value is a CallToolResult object
+ */
+function isCallToolResult(value: unknown): boolean {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "isError" in value &&
+    "content" in value &&
+    Array.isArray((value as any).content)
+  );
+}
+
+/**
+ * Extracts error information from CallToolResult objects.
+ *
+ * SDK 1.21.0+ converts errors to CallToolResult, losing original stack traces.
+ * This extracts the error message from the content array.
+ *
+ * @param result - CallToolResult object with error
+ * @param _contextStack - Optional Error object for stack context (unused, kept for compatibility)
+ * @returns ErrorData with extracted message (no stack trace)
+ */
+function captureCallToolResultError(
+  result: any,
+  _contextStack?: Error,
+): ErrorData {
+  // Extract message from content array
+  const message =
+    result.content
+      ?.filter((c: any) => c.type === "text")
+      .map((c: any) => c.text)
+      .join(" ")
+      .trim() || "Unknown error";
+
+  const errorData: ErrorData = {
+    message,
+    type: "UnknownErrorType", // Can't determine actual type from CallToolResult
+    platform: "javascript",
+    // No stack or frames - SDK stripped the original error information
+  };
+
+  return errorData;
 }
 
 /**

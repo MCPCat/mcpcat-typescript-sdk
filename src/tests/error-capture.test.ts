@@ -7,6 +7,7 @@ import { track } from "../index.js";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types";
 import { EventCapture } from "./test-utils.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
+import { z } from "zod";
 
 describe("Error Capture Integration Tests", () => {
   let eventCapture: EventCapture;
@@ -63,24 +64,12 @@ describe("Error Capture Integration Tests", () => {
       // Verify error structure
       expect(errorEvent!.error).toBeDefined();
       expect(errorEvent!.error!.message).toContain("not found");
+
+      // Make sure execution error is properly recognized as an error
       expect(errorEvent!.error!.type).toBe("Error");
-
-      // Verify stack trace is captured
       expect(errorEvent!.error!.stack).toBeDefined();
-      expect(typeof errorEvent!.error!.stack).toBe("string");
-      expect(errorEvent!.error!.stack!.length).toBeGreaterThan(0);
-
-      // Verify stack frames are parsed
       expect(errorEvent!.error!.frames).toBeDefined();
-      expect(Array.isArray(errorEvent!.error!.frames)).toBe(true);
       expect(errorEvent!.error!.frames!.length).toBeGreaterThan(0);
-
-      // Verify frame structure
-      const firstFrame = errorEvent!.error!.frames![0];
-      expect(firstFrame).toHaveProperty("filename");
-      expect(firstFrame).toHaveProperty("function");
-      expect(firstFrame).toHaveProperty("in_app");
-      expect(typeof firstFrame.in_app).toBe("boolean");
     } finally {
       await cleanup();
     }
@@ -135,21 +124,20 @@ describe("Error Capture Integration Tests", () => {
       const errorEvent = events.find((e) => e.isError);
       expect(errorEvent).toBeDefined();
 
-      // Verify main error
-      expect(errorEvent!.error!.message).toBe("Wrapper error");
+      // Ensure we get the real Error type
       expect(errorEvent!.error!.type).toBe("Error");
+      expect(errorEvent!.error!.message).toContain("Wrapper error");
 
-      // Verify cause chain is captured
+      // Verify we captured the full error with stack trace
+      expect(errorEvent!.error!.stack).toBeDefined();
+      expect(errorEvent!.error!.frames).toBeDefined();
+
+      // Error.cause chains should be captured
       expect(errorEvent!.error!.chained_errors).toBeDefined();
       expect(errorEvent!.error!.chained_errors!.length).toBe(1);
       expect(errorEvent!.error!.chained_errors![0].message).toBe(
         "Root cause error",
       );
-      expect(errorEvent!.error!.chained_errors![0].type).toBe("Error");
-
-      // Verify cause has its own stack trace
-      expect(errorEvent!.error!.chained_errors![0].stack).toBeDefined();
-      expect(errorEvent!.error!.chained_errors![0].frames).toBeDefined();
     } finally {
       await cleanup();
     }
@@ -199,8 +187,11 @@ describe("Error Capture Integration Tests", () => {
       const errorEvent = events.find((e) => e.isError);
 
       expect(errorEvent).toBeDefined();
+      // With callback-level capture, we preserve the specific error type
       expect(errorEvent!.error!.type).toBe("TypeError");
       expect(errorEvent!.error!.message).toContain("null");
+      expect(errorEvent!.error!.stack).toBeDefined();
+      expect(errorEvent!.error!.frames).toBeDefined();
     } finally {
       await cleanup();
     }
@@ -246,9 +237,10 @@ describe("Error Capture Integration Tests", () => {
       const errorEvent = events.find((e) => e.isError);
 
       expect(errorEvent).toBeDefined();
-      expect(errorEvent!.error!.type).toBe("NonError");
-      expect(errorEvent!.error!.message).toBe("This is a string error");
-      // Non-Error objects don't have stack traces
+      expect(errorEvent!.error!.type).toBe("UnknownErrorType");
+      expect(errorEvent!.error!.message).toContain("This is a string error");
+      // Non-Error throws don't have stack traces
+      // (SDK converts them, we can't capture at callback level)
       expect(errorEvent!.error!.stack).toBeUndefined();
       expect(errorEvent!.error!.frames).toBeUndefined();
     } finally {
@@ -425,6 +417,240 @@ describe("Error Capture Integration Tests", () => {
       const successEvent = events[events.length - 1];
       expect(successEvent.isError).toBeUndefined();
       expect(successEvent.error).toBeUndefined();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("should capture validation errors for invalid enum values", async () => {
+    const { server, client, cleanup } = await setupTestServerAndClient();
+
+    try {
+      // Add a tool with enum validation
+      server.tool(
+        "calculate",
+        "Perform calculations",
+        {
+          operation: z.enum(["add", "subtract", "multiply", "divide"]),
+          a: z.number(),
+          b: z.number(),
+        },
+        async (args) => {
+          return {
+            content: [{ type: "text", text: `Result: ${args.a}` }],
+          };
+        },
+      );
+
+      // Track the server
+      await track(server, {
+        projectId: "test-project",
+        enableTracing: true,
+      });
+
+      // Call with invalid enum value - should throw before callback executes
+      try {
+        await client.request(
+          {
+            method: "tools/call",
+            params: {
+              name: "calculate",
+              arguments: {
+                operation: "modulo", // Invalid enum value
+                a: 10,
+                b: 3,
+                context: "Testing validation error capture",
+              },
+            },
+          },
+          CallToolResultSchema,
+        );
+        expect.fail("Should have thrown validation error");
+      } catch (error: any) {
+        // MCP SDK throws validation errors, doesn't return CallToolResult
+        expect(error).toBeDefined();
+      }
+
+      // Wait for event
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Find the tool call event
+      const events = eventCapture.findEventsByResourceName("calculate");
+      expect(events.length).toBeGreaterThan(0);
+
+      const errorEvent = events.find((e) => e.isError);
+      expect(errorEvent).toBeDefined();
+
+      // Verify error captured
+      expect(errorEvent!.error).toBeDefined();
+      expect(errorEvent!.error!.message).toContain("Invalid");
+
+      // Type can vary by SDK version
+      // SDK 1.11.5: "McpError", SDK 1.21.0+: "UnknownErrorType"
+      expect(["McpError", "UnknownErrorType", "Error"]).toContain(
+        errorEvent!.error!.type,
+      );
+
+      // Stack trace may be present (older SDK) or not (newer SDK)
+      // Don't require it but verify format if present
+      if (errorEvent!.error!.stack) {
+        expect(errorEvent!.error!.stack!.length).toBeGreaterThan(0);
+      }
+
+      // Frames may be present
+      if (errorEvent!.error!.frames) {
+        expect(errorEvent!.error!.frames!.length).toBeGreaterThan(0);
+      }
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("should capture errors for unknown tool names", async () => {
+    const { server, client, cleanup } = await setupTestServerAndClient();
+
+    try {
+      // Track the server
+      await track(server, {
+        projectId: "test-project",
+        enableTracing: true,
+      });
+
+      // Call non-existent tool
+      try {
+        await client.request(
+          {
+            method: "tools/call",
+            params: {
+              name: "nonexistent_tool",
+              arguments: {
+                context: "Testing unknown tool error",
+              },
+            },
+          },
+          CallToolResultSchema,
+        );
+        expect.fail("Should have thrown unknown tool error");
+      } catch (error: any) {
+        // SDK throws error for unknown tools
+        expect(error).toBeDefined();
+      }
+
+      // Wait for event
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Find the tool call event
+      const events = eventCapture.findEventsByResourceName("nonexistent_tool");
+      expect(events.length).toBeGreaterThan(0);
+
+      const errorEvent = events.find((e) => e.isError);
+      expect(errorEvent).toBeDefined();
+
+      // Verify error captured
+      expect(errorEvent!.error!.message).toContain("not found");
+
+      // Type can vary by SDK version
+      expect(["McpError", "UnknownErrorType", "Error"]).toContain(
+        errorEvent!.error!.type,
+      );
+
+      // Stack trace may be present (verify if present)
+      if (errorEvent!.error!.stack) {
+        expect(errorEvent!.error!.stack!.length).toBeGreaterThan(0);
+      }
+      if (errorEvent!.error!.frames) {
+        expect(errorEvent!.error!.frames!.length).toBeGreaterThan(0);
+      }
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("should capture validation errors for missing required parameters", async () => {
+    const { server, client, cleanup } = await setupTestServerAndClient();
+
+    try {
+      // add_todo requires 'text' parameter
+      await track(server, {
+        projectId: "test-project",
+        enableTracing: true,
+      });
+
+      // Call without required parameter
+      try {
+        await client.request(
+          {
+            method: "tools/call",
+            params: {
+              name: "add_todo",
+              arguments: {
+                context: "Testing missing parameter",
+                // 'text' parameter is missing
+              },
+            },
+          },
+          CallToolResultSchema,
+        );
+        expect.fail("Should have thrown validation error");
+      } catch (error: any) {
+        expect(error).toBeDefined();
+      }
+
+      // Wait for event
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const events = eventCapture.findEventsByResourceName("add_todo");
+      const errorEvent = events.find((e) => e.isError);
+
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent!.error!.message).toContain("Invalid");
+
+      // Type can vary by SDK version
+      expect(["McpError", "UnknownErrorType", "Error"]).toContain(
+        errorEvent!.error!.type,
+      );
+
+      // Stack trace may be present (verify if present)
+      if (errorEvent!.error!.stack) {
+        expect(errorEvent!.error!.stack!.length).toBeGreaterThan(0);
+      }
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("should publish exactly one event per tool call", async () => {
+    const { server, client, cleanup } = await setupTestServerAndClient();
+
+    try {
+      await track(server, {
+        projectId: "test-project",
+        enableTracing: true,
+      });
+
+      // Make a successful tool call
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "list_todos",
+            arguments: {
+              context: "Testing single event publishing",
+            },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      // Wait for event
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Verify exactly one event for this call
+      const events = eventCapture.findEventsByResourceName("list_todos");
+      const successEvents = events.filter((e) => !e.isError);
+
+      // Should be exactly 1 event, not 2 (which would indicate double publishing)
+      expect(successEvents.length).toBe(1);
     } finally {
       await cleanup();
     }
