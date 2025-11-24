@@ -272,7 +272,7 @@ describe("captureException", () => {
       expect(result.chained_errors).toBeDefined();
       expect(result.chained_errors!.length).toBe(1);
       expect(result.chained_errors![0].message).toBe("string cause");
-      expect(result.chained_errors![0].type).toBe("UnknownErrorType");
+      expect(result.chained_errors![0].type).toBeUndefined();
     });
 
     it("should detect circular cause references", () => {

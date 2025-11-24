@@ -686,7 +686,7 @@ function unwrapErrorCauses(error: Error): ChainedErrorData[] {
     if (!(currentError instanceof Error)) {
       chainedErrors.push({
         message: stringifyNonError(currentError),
-        type: "UnknownErrorType",
+        type: undefined,
       });
       break;
     }
@@ -760,7 +760,7 @@ function captureCallToolResultError(
 
   const errorData: ErrorData = {
     message,
-    type: "UnknownErrorType", // Can't determine actual type from CallToolResult
+    type: undefined, // Can't determine actual type from CallToolResult
     platform: "javascript",
     // No stack or frames - SDK stripped the original error information
   };

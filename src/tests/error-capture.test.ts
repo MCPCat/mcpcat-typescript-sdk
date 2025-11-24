@@ -237,7 +237,7 @@ describe("Error Capture Integration Tests", () => {
       const errorEvent = events.find((e) => e.isError);
 
       expect(errorEvent).toBeDefined();
-      expect(errorEvent!.error!.type).toBe("UnknownErrorType");
+      expect(errorEvent!.error!.type).toBeUndefined();
       expect(errorEvent!.error!.message).toContain("This is a string error");
       // Non-Error throws don't have stack traces
       // (SDK converts them, we can't capture at callback level)
@@ -486,8 +486,8 @@ describe("Error Capture Integration Tests", () => {
       expect(errorEvent!.error!.message).toContain("Invalid");
 
       // Type can vary by SDK version
-      // SDK 1.11.5: "McpError", SDK 1.21.0+: "UnknownErrorType"
-      expect(["McpError", "UnknownErrorType", "Error"]).toContain(
+      // SDK 1.11.5: "McpError" (actual Error), SDK 1.21.0+: undefined (CallToolResult)
+      expect(["McpError", "Error", undefined]).toContain(
         errorEvent!.error!.type,
       );
 
@@ -550,7 +550,8 @@ describe("Error Capture Integration Tests", () => {
       expect(errorEvent!.error!.message).toContain("not found");
 
       // Type can vary by SDK version
-      expect(["McpError", "UnknownErrorType", "Error"]).toContain(
+      // SDK 1.11.5: "McpError" (actual Error), SDK 1.21.0+: undefined (CallToolResult)
+      expect(["McpError", "Error", undefined]).toContain(
         errorEvent!.error!.type,
       );
 
@@ -606,7 +607,8 @@ describe("Error Capture Integration Tests", () => {
       expect(errorEvent!.error!.message).toContain("Invalid");
 
       // Type can vary by SDK version
-      expect(["McpError", "UnknownErrorType", "Error"]).toContain(
+      // SDK 1.11.5: "McpError" (actual Error), SDK 1.21.0+: undefined (CallToolResult)
+      expect(["McpError", "Error", undefined]).toContain(
         errorEvent!.error!.type,
       );
 
