@@ -237,37 +237,30 @@ function addTracingToToolCallback(
 ): RegisteredTool {
   const originalCallback = tool.callback;
 
-  // Check if this callback has already been wrapped
   if (wrappedCallbacks.has(originalCallback)) {
     writeToLog(`Tool ${toolName} callback already wrapped, skipping re-wrap`);
     return tool;
   }
 
-  // Check if tool has already been processed
   if ((tool as any)[MCPCAT_PROCESSED]) {
     writeToLog(`Tool ${toolName} already processed, skipping re-wrap`);
     return tool;
   }
 
-  // Create a wrapper that matches both callback signatures
   const wrappedCallback = async function (
     ...params: any[]
   ): Promise<CallToolResult> {
-    // Determine if this is (args, extra) or just (extra) signature
     let args: any;
     let extra: CompatibleRequestHandlerExtra;
 
     if (params.length === 2) {
-      // (args, extra) signature
       args = params[0];
       extra = params[1];
     } else {
-      // (extra) signature
       args = undefined;
       extra = params[0];
     }
 
-    // Helper function to remove context from args
     const removeContextFromArgs = (args: any): any => {
       if (args && typeof args === "object" && "context" in args) {
         const { context: _context, ...argsWithoutContext } = args;
@@ -276,34 +269,26 @@ function addTracingToToolCallback(
       return args;
     };
 
-    // Remove context from args before calling original callback
-    // BUT keep it for get_more_tools since it's a required parameter
     const cleanedArgs =
       toolName === "get_more_tools" ? args : removeContextFromArgs(args);
 
-    // Call original callback with cleaned args, capturing any errors
     try {
       if (cleanedArgs === undefined) {
-        return await (
-          originalCallback as (
-            extra: CompatibleRequestHandlerExtra,
-          ) => Promise<CallToolResult>
-        )(extra);
+        const handler = originalCallback as (
+          extra: CompatibleRequestHandlerExtra,
+        ) => Promise<CallToolResult>;
+        return await handler(extra);
       } else {
-        return await (
-          originalCallback as (
-            args: any,
-            extra: CompatibleRequestHandlerExtra,
-          ) => Promise<CallToolResult>
-        )(cleanedArgs, extra);
+        const handler = originalCallback as (
+          args: any,
+          extra: CompatibleRequestHandlerExtra,
+        ) => Promise<CallToolResult>;
+        return await handler(cleanedArgs, extra);
       }
     } catch (error) {
-      // Store original error for handler to use
       if (error instanceof Error) {
         (extra as any).__mcpcat_error = error;
       }
-
-      // Re-throw so SDK can process it normally
       throw error;
     }
   };
