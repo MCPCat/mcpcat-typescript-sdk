@@ -31,14 +31,14 @@ export function captureException(
   if (!(error instanceof Error)) {
     return {
       message: stringifyNonError(error),
-      type: "UnknownErrorType",
+      type: undefined,
       platform: "javascript",
     };
   }
 
   const errorData: ErrorData = {
     message: error.message || "",
-    type: error.name || error.constructor?.name || "Error",
+    type: error.name || error.constructor?.name || undefined,
     platform: "javascript",
   };
 
