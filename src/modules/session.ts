@@ -69,17 +69,14 @@ export function getServerSessionId(
 
   // If MCP sessionId is provided
   if (mcpSessionId) {
-    // Check if it's a new or changed MCP sessionId
-    if (mcpSessionId !== data.lastMcpSessionId) {
-      // Derive deterministic KSUID from MCP sessionId
-      data.sessionId = deriveSessionIdFromMCPSession(
-        mcpSessionId,
-        data.projectId || undefined,
-      );
-      data.lastMcpSessionId = mcpSessionId;
-      data.sessionSource = "mcp";
-      setServerTrackingData(server, data);
-    }
+    // Derive deterministic KSUID from MCP sessionId
+    data.sessionId = deriveSessionIdFromMCPSession(
+      mcpSessionId,
+      data.projectId || undefined,
+    );
+    data.lastMcpSessionId = mcpSessionId;
+    data.sessionSource = "mcp";
+    setServerTrackingData(server, data);
     // If MCP sessionId hasn't changed, continue using the existing derived KSUID
     setLastActivity(server);
     return data.sessionId;
