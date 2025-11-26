@@ -189,9 +189,18 @@ class EventQueue {
 }
 
 export const eventQueue = new EventQueue();
-process.once("SIGINT", () => eventQueue.destroy());
-process.once("SIGTERM", () => eventQueue.destroy());
-process.once("beforeExit", () => eventQueue.destroy());
+
+// Register graceful shutdown handlers if available (Node.js only)
+// Edge environments (Cloudflare Workers, etc.) don't have process signals
+try {
+  if (typeof process !== "undefined" && typeof process.once === "function") {
+    process.once("SIGINT", () => eventQueue.destroy());
+    process.once("SIGTERM", () => eventQueue.destroy());
+    process.once("beforeExit", () => eventQueue.destroy());
+  }
+} catch {
+  // process.once not available in this environment - graceful shutdown handlers not registered
+}
 
 export function setTelemetryManager(telemetryManager: TelemetryManager): void {
   eventQueue.setTelemetryManager(telemetryManager);

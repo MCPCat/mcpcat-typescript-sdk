@@ -11,8 +11,8 @@ importers:
         specifier: ^0.203.0
         version: 0.203.0(@opentelemetry/api@1.9.0)
       mcpcat-api:
-        specifier: 0.1.3
-        version: 0.1.3
+        specifier: 0.1.6
+        version: 0.1.6
       redact-pii:
         specifier: 3.4.0
         version: 3.4.0
@@ -2771,10 +2771,10 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
-  mcpcat-api@0.1.3:
+  mcpcat-api@0.1.6:
     resolution:
       {
-        integrity: sha512-Lv0IkPIZoGzdoSUYCWyrj3h2l9qzeODQa3uQ2/+jhENWbDfRpoGsV1R7zrP4Bpu//O8E7GJAbpL/lArjk8Q3FA==,
+        integrity: sha512-jNnPMBa5mLClghI+KLVFwYzOTL6G02kGIut4qGzso+GgLjHYOQ7x7zy0Cw0Pkx1MCb1JMwxF8yJ76xgEwuopNQ==,
       }
 
   mdurl@2.0.0:
@@ -5875,7 +5875,7 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcpcat-api@0.1.3: {}
+  mcpcat-api@0.1.6: {}
 
   mdurl@2.0.0: {}
 

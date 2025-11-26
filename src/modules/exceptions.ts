@@ -1,5 +1,21 @@
 import { ErrorData, StackFrame, ChainedErrorData } from "../types.js";
-import { readFileSync } from "fs";
+
+// Lazy-loaded fs module for context_line extraction (Node.js only)
+// Edge environments don't have filesystem access
+let fsModule: typeof import("fs") | null = null;
+let fsInitAttempted = false;
+
+function getFsSync(): typeof import("fs") | null {
+  if (!fsInitAttempted) {
+    fsInitAttempted = true;
+    try {
+      fsModule = require("fs");
+    } catch {
+      fsModule = null;
+    }
+  }
+  return fsModule;
+}
 
 // Maximum number of exceptions to capture in a cause chain
 const MAX_EXCEPTION_CHAIN_DEPTH = 10;
@@ -120,8 +136,14 @@ function addContextToFrame(frame: StackFrame): StackFrame {
     return frame;
   }
 
+  // Get fs module lazily - returns null in edge environments
+  const fs = getFsSync();
+  if (!fs) {
+    return frame; // File reading not available in this environment
+  }
+
   try {
-    const source = readFileSync(frame.abs_path, "utf8");
+    const source = fs.readFileSync(frame.abs_path, "utf8");
     const lines = source.split("\n");
     const lineIndex = frame.lineno - 1; // Convert to 0-based index
 
@@ -635,9 +657,18 @@ function makeRelativePath(filename: string): string {
   // Step 7: Strip deployment-specific paths
   result = stripDeploymentPaths(result);
 
-  // Step 8: Strip current working directory
-  const cwd = process.cwd();
-  if (result.startsWith(cwd)) {
+  // Step 8: Strip current working directory (if available)
+  // process.cwd() may not be available in edge environments
+  let cwd: string | null = null;
+  try {
+    if (typeof process !== "undefined" && typeof process.cwd === "function") {
+      cwd = process.cwd();
+    }
+  } catch {
+    // process.cwd() not available in this environment
+  }
+
+  if (cwd && result.startsWith(cwd)) {
     result = result.substring(cwd.length + 1); // +1 to remove leading /
   }
 
