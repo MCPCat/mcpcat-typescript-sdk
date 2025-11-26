@@ -14,6 +14,7 @@ import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
 import { addContextParameterToTool } from "./context-parameters.js";
 import { handleReportMissing } from "./tools.js";
+import { getObjectShape, getLiteralValue } from "./zod-compat.js";
 import { setupInitializeTracing, setupListToolsTracing } from "./tracing.js";
 import { captureException } from "./exceptions.js";
 
@@ -332,7 +333,8 @@ function setupToolsCallHandlerWrapping(server: HighLevelMCPServerLike): void {
     requestSchema: any,
     handler: any,
   ) {
-    const method = requestSchema?.shape?.method?.value;
+    const shape = getObjectShape(requestSchema);
+    const method = shape?.method ? getLiteralValue(shape.method) : undefined;
 
     // Only wrap tools/call handler
     if (method === "tools/call") {

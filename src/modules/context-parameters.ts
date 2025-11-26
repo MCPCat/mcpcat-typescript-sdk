@@ -1,26 +1,12 @@
 import { RegisteredTool } from "../types";
 import { z } from "zod";
 import { DEFAULT_CONTEXT_PARAMETER_DESCRIPTION } from "./constants";
-
-// Detect if something is a Zod schema (has _def and parse methods)
-function isZodSchema(schema: any): boolean {
-  return (
-    schema &&
-    typeof schema === "object" &&
-    "_def" in schema &&
-    typeof schema.parse === "function"
-  );
-}
-
-// Detect if it's shorthand Zod syntax (object with z.* values)
-function isShorthandZodSyntax(schema: any): boolean {
-  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
-    return false;
-  }
-
-  // Check if any value is a Zod schema
-  return Object.values(schema).some((value) => isZodSchema(value));
-}
+import {
+  isZodSchema,
+  isShorthandZodSyntax,
+  schemaHasProperty,
+  extendObjectSchema,
+} from "./zod-compat";
 
 export function addContextParameterToTool(
   tool: RegisteredTool,
@@ -43,36 +29,25 @@ export function addContextParameterToTool(
     return modifiedTool;
   }
 
-  // Handle Zod z.object() schemas
+  const contextDescription =
+    customContextDescription || DEFAULT_CONTEXT_PARAMETER_DESCRIPTION;
+
+  // Handle Zod z.object() schemas (both v3 and v4)
   if (isZodSchema(modifiedTool.inputSchema)) {
     // Check if context already exists in Zod schema shape
-    if (
-      modifiedTool.inputSchema.shape &&
-      "context" in modifiedTool.inputSchema.shape
-    ) {
+    if (schemaHasProperty(modifiedTool.inputSchema, "context")) {
       return modifiedTool;
     }
-    // It's a Zod schema, augment it with context
-    const contextSchema = z.object({
-      context: z
-        .string()
-        .describe(
-          customContextDescription || DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
-        ),
-    });
 
-    // Use extend to add context to the schema
-    if (typeof modifiedTool.inputSchema.extend === "function") {
-      modifiedTool.inputSchema = modifiedTool.inputSchema.extend(
-        contextSchema.shape,
-      );
-    } else if (typeof modifiedTool.inputSchema.augment === "function") {
-      modifiedTool.inputSchema =
-        modifiedTool.inputSchema.augment(contextSchema);
-    } else {
-      // Fallback: merge with new z.object
-      modifiedTool.inputSchema = contextSchema.merge(modifiedTool.inputSchema);
-    }
+    // Extend the schema with context using our compat layer
+    const contextShape = {
+      context: z.string().describe(contextDescription),
+    };
+
+    modifiedTool.inputSchema = extendObjectSchema(
+      modifiedTool.inputSchema,
+      contextShape,
+    );
 
     return modifiedTool;
   }
@@ -84,18 +59,15 @@ export function addContextParameterToTool(
       return modifiedTool;
     }
 
-    // Create a new Zod schema with context
-    const contextField = z
-      .string()
-      .describe(
-        customContextDescription || DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
-      );
+    // Extend using our compat layer (handles both v3 and v4)
+    const contextShape = {
+      context: z.string().describe(contextDescription),
+    };
 
-    // Create new z.object with context and all original fields
-    modifiedTool.inputSchema = z.object({
-      context: contextField,
-      ...modifiedTool.inputSchema,
-    });
+    modifiedTool.inputSchema = extendObjectSchema(
+      modifiedTool.inputSchema,
+      contextShape,
+    );
 
     return modifiedTool;
   }
@@ -115,8 +87,7 @@ export function addContextParameterToTool(
 
     modifiedTool.inputSchema.properties.context = {
       type: "string",
-      description:
-        customContextDescription || DEFAULT_CONTEXT_PARAMETER_DESCRIPTION,
+      description: contextDescription,
     };
 
     // Add context to required array if it exists

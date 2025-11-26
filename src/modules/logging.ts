@@ -1,33 +1,63 @@
-import { writeFileSync, appendFileSync, existsSync } from "fs";
-import { homedir } from "os";
-import { join } from "path";
+// Lazy-loaded module references for Node.js file logging
+// These are loaded dynamically to support edge environments (Cloudflare Workers, etc.)
+let fsModule: typeof import("fs") | null = null;
+let logFilePath: string | null = null;
+let initAttempted = false;
+let useConsoleFallback = false;
 
-// Safely determine log file path, handling environments where homedir() may return null
-let LOG_FILE: string | null = null;
-try {
-  const home = homedir();
-  if (home && home !== null && home !== undefined) {
-    LOG_FILE = join(home, "mcpcat.log");
+/**
+ * Attempts to initialize Node.js file logging.
+ * Falls back to console.log in edge environments where fs/os modules are unavailable.
+ */
+function tryInitSync(): void {
+  if (initAttempted) return;
+  initAttempted = true;
+
+  try {
+    // Use dynamic require for sync initialization
+    // Works in Node.js, fails gracefully in Workers/edge environments
+    const fs = require("fs");
+    const os = require("os");
+    const path = require("path");
+
+    const home = os.homedir?.();
+    if (home) {
+      fsModule = fs;
+      logFilePath = path.join(home, "mcpcat.log");
+    } else {
+      // homedir() returned null/undefined - use console fallback
+      useConsoleFallback = true;
+    }
+  } catch {
+    // Module not available or homedir() not implemented - use console fallback
+    useConsoleFallback = true;
+    fsModule = null;
+    logFilePath = null;
   }
-} catch {
-  // If homedir() or join() fails, LOG_FILE remains null
-  LOG_FILE = null;
 }
 
 export function writeToLog(message: string): void {
-  // Skip logging if we don't have a valid log file path
-  if (!LOG_FILE) {
+  tryInitSync();
+
+  const timestamp = new Date().toISOString();
+  const logEntry = `[${timestamp}] ${message}`;
+
+  // Edge environment: use console.log as fallback
+  if (useConsoleFallback) {
+    console.log(`[mcpcat] ${logEntry}`);
     return;
   }
 
-  const timestamp = new Date().toISOString();
-  const logEntry = `[${timestamp}] ${message}\n`;
+  // Node.js environment: write to file
+  if (!logFilePath || !fsModule) {
+    return;
+  }
 
   try {
-    if (!existsSync(LOG_FILE)) {
-      writeFileSync(LOG_FILE, logEntry);
+    if (!fsModule.existsSync(logFilePath)) {
+      fsModule.writeFileSync(logFilePath, logEntry + "\n");
     } else {
-      appendFileSync(LOG_FILE, logEntry);
+      fsModule.appendFileSync(logFilePath, logEntry + "\n");
     }
   } catch {
     // Silently fail to avoid breaking the server
