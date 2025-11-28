@@ -1,3 +1,5 @@
+import { createRequire } from "module";
+
 // Lazy-loaded module references for Node.js file logging
 // These are loaded dynamically to support edge environments (Cloudflare Workers, etc.)
 let fsModule: typeof import("fs") | null = null;
@@ -14,8 +16,9 @@ function tryInitSync(): void {
   initAttempted = true;
 
   try {
-    // Use dynamic require for sync initialization
-    // Works in Node.js, fails gracefully in Workers/edge environments
+    // Use createRequire for ESM compatibility
+    // Works in Node.js ESM/CJS, fails gracefully in Workers/edge environments
+    const require = createRequire(import.meta.url);
     const fs = require("fs");
     const os = require("os");
     const path = require("path");
@@ -42,9 +45,10 @@ export function writeToLog(message: string): void {
   const timestamp = new Date().toISOString();
   const logEntry = `[${timestamp}] ${message}`;
 
-  // Edge environment: use console.log as fallback
+  // Edge environment: use console.error as fallback (stderr, not stdout)
+  // This is critical for MCP servers using stdio transport
   if (useConsoleFallback) {
-    console.log(`[mcpcat] ${logEntry}`);
+    console.error(`[mcpcat] ${logEntry}`);
     return;
   }
 

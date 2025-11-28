@@ -17,6 +17,7 @@ import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { captureException } from "./exceptions.js";
+import { addContextParameterToTools } from "./context-parameters.js";
 
 function isToolResultError(result: any): boolean {
   return result && typeof result === "object" && result.isError === true;
@@ -69,6 +70,14 @@ export function setupListToolsTracing(
           extra,
         )) as ListToolsResult;
         tools = originalResponse.tools || [];
+
+        // Inject context parameters AFTER MCP SDK has converted Zod to JSON Schema
+        if (data?.options.enableToolCallContext) {
+          tools = addContextParameterToTools(
+            tools,
+            data.options.customContextDescription,
+          );
+        }
       } catch (error) {
         // If original handler fails, start with empty tools
         writeToLog(
