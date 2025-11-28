@@ -9,7 +9,7 @@ overrides:
   tmp: ">=0.2.4"
   vite: ">=6.4.1"
   body-parser: ">=2.2.1"
-  brace-expansion: ">=2.0.2"
+  brace-expansion: 2.0.2
 
 importers:
   .:
@@ -1465,12 +1465,11 @@ packages:
         integrity: sha512-szgSZqUxI5T8mLKvS7WTjF9is+MVbOeLADU73IseOcrqhxr/VAvy6wfoVE39KnKzA7JRhjF5eUagNlHwvZPlKQ==,
       }
 
-  balanced-match@3.0.1:
+  balanced-match@1.0.2:
     resolution:
       {
-        integrity: sha512-vjtV3hiLqYDNRoiAv0zC4QaGAMPomEoq83PRmYIofPswwZurCeWR5LByXm7SyoL0Zh5+2z0+HC7jG8gSZJUh0w==,
+        integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==,
       }
-    engines: { node: ">= 16" }
 
   better-path-resolve@1.0.0:
     resolution:
@@ -1486,12 +1485,11 @@ packages:
       }
     engines: { node: ">=18" }
 
-  brace-expansion@4.0.1:
+  brace-expansion@2.0.2:
     resolution:
       {
-        integrity: sha512-YClrbvTCXGe70pU2JiEiPLYXO9gQkyxYeKpJIQHVS/gOs6EWMQP2RYBwjFLNT322Ji8TOC3IMPfsYCedNpzKfA==,
+        integrity: sha512-Jt0vHyM+jmUBqojB7E1NIYadt0vI0Qxjxd2TErW94wDz+E2LAm5vKMXXwg6ZZBTHPuUlDgQHKXvjGBdfcF1ZDQ==,
       }
-    engines: { node: ">= 18" }
 
   braces@3.0.3:
     resolution:
@@ -4595,7 +4593,7 @@ snapshots:
       estree-walker: 3.0.3
       js-tokens: 9.0.1
 
-  balanced-match@3.0.1: {}
+  balanced-match@1.0.2: {}
 
   better-path-resolve@1.0.0:
     dependencies:
@@ -4615,9 +4613,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  brace-expansion@4.0.1:
+  brace-expansion@2.0.2:
     dependencies:
-      balanced-match: 3.0.1
+      balanced-match: 1.0.2
 
   braces@3.0.3:
     dependencies:
@@ -5300,11 +5298,11 @@ snapshots:
 
   minimatch@3.1.2:
     dependencies:
-      brace-expansion: 4.0.1
+      brace-expansion: 2.0.2
 
   minimatch@9.0.5:
     dependencies:
-      brace-expansion: 4.0.1
+      brace-expansion: 2.0.2
 
   minipass@7.1.2: {}
 
