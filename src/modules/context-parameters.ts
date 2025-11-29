@@ -1,10 +1,16 @@
 import { RegisteredTool } from "../types";
 import { DEFAULT_CONTEXT_PARAMETER_DESCRIPTION } from "./constants";
+import { writeToLog } from "./logging.js";
 
 /**
  * Adds a context parameter to a tool's JSON Schema.
  * This function is called AFTER the MCP SDK has converted Zod schemas to JSON Schema,
  * so we only need to handle JSON Schema format.
+ *
+ * Skips injection (with warning) for:
+ * - Tools that already have a 'context' parameter
+ * - Complex schemas (oneOf/allOf/anyOf) that can't safely have properties added
+ * - Schemas with additionalProperties: false
  */
 export function addContextParameterToTool(
   tool: RegisteredTool,
@@ -12,6 +18,28 @@ export function addContextParameterToTool(
 ): RegisteredTool {
   // Create a shallow copy of the tool to avoid modifying the original
   const modifiedTool = { ...tool };
+  const toolName = (tool as any).name || "unknown";
+  const schema = modifiedTool.inputSchema as Record<string, any> | undefined;
+
+  // Check if tool already has context parameter - skip to avoid collision
+  if (schema?.properties?.context) {
+    writeToLog(
+      `WARN: Tool "${toolName}" already has 'context' parameter. Skipping context injection.`,
+    );
+    return modifiedTool;
+  }
+
+  // Skip complex schemas that can't safely have properties added at root level
+  if (schema?.oneOf || schema?.allOf || schema?.anyOf) {
+    writeToLog(
+      `WARN: Tool "${toolName}" has complex schema (oneOf/allOf/anyOf). Skipping context injection.`,
+    );
+    return modifiedTool;
+  }
+
+  // Note: If additionalProperties is false, we'll need to remove that constraint
+  // when adding context, otherwise the schema would be invalid. We handle this
+  // after the deep copy below.
 
   if (!modifiedTool.inputSchema) {
     modifiedTool.inputSchema = {
@@ -19,11 +47,6 @@ export function addContextParameterToTool(
       properties: {},
       required: [],
     };
-  }
-
-  // Check if context already exists
-  if (modifiedTool.inputSchema.properties?.context) {
-    return modifiedTool;
   }
 
   const contextDescription =
@@ -37,6 +60,12 @@ export function addContextParameterToTool(
   // Ensure properties object exists
   if (!modifiedTool.inputSchema.properties) {
     modifiedTool.inputSchema.properties = {};
+  }
+
+  // Handle additionalProperties: false - must remove this constraint since we're adding context
+  // The MCP SDK adds this constraint when converting Zod schemas to JSON Schema
+  if (modifiedTool.inputSchema.additionalProperties === false) {
+    delete modifiedTool.inputSchema.additionalProperties;
   }
 
   // Add context property

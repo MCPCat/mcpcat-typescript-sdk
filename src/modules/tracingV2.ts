@@ -34,6 +34,7 @@ function isToolResultError(result: any): boolean {
 interface ZodV3Internal {
   _def?: {
     value?: unknown;
+    values?: unknown[]; // For enums - some Zod versions store literal values here
     shape?: Record<string, unknown> | (() => Record<string, unknown>);
   };
   shape?: Record<string, unknown> | (() => Record<string, unknown>);
@@ -43,6 +44,7 @@ interface ZodV4Internal {
   _zod?: {
     def?: {
       value?: unknown;
+      values?: unknown[]; // For enums - some Zod versions store literal values here
       shape?: Record<string, unknown> | (() => Record<string, unknown>);
     };
   };
@@ -66,7 +68,8 @@ function getObjectShape(schema: unknown): Record<string, unknown> | undefined {
     rawShape = v4Schema._zod?.def?.shape;
   } else {
     const v3Schema = schema as ZodV3Internal;
-    rawShape = v3Schema.shape;
+    // Try .shape first, then fall back to _def.shape (some v3 schema types store it there)
+    rawShape = v3Schema.shape ?? v3Schema._def?.shape;
   }
 
   if (!rawShape) return undefined;
@@ -87,11 +90,27 @@ function getLiteralValue(schema: unknown): unknown {
 
   if (isZ4Schema(schema)) {
     const v4Schema = schema as ZodV4Internal;
-    return v4Schema._zod?.def?.value;
+    const def = v4Schema._zod?.def;
+    if (def?.value !== undefined) return def.value;
+    // Fallback: values array (for enums)
+    if (Array.isArray(def?.values) && def.values.length > 0) {
+      return def.values[0];
+    }
   } else {
     const v3Schema = schema as ZodV3Internal;
-    return v3Schema._def?.value;
+    const def = v3Schema._def;
+    if (def?.value !== undefined) return def.value;
+    // Fallback: values array (for enums)
+    if (Array.isArray(def?.values) && def.values.length > 0) {
+      return def.values[0];
+    }
   }
+
+  // Final fallback: direct .value property (some Zod versions)
+  const directValue = (schema as { value?: unknown }).value;
+  if (directValue !== undefined) return directValue;
+
+  return undefined;
 }
 
 // --- End of Zod helpers ---

@@ -44,7 +44,7 @@ export function setupMCPCatTools(server: MCPServerLike): void {
       let tools: any[] = [];
       const data = getServerTrackingData(server);
       let event: UnredactedEvent = {
-        sessionId: getServerSessionId(server),
+        sessionId: getServerSessionId(server, extra),
         parameters: {
           request: request,
           extra: extra,
