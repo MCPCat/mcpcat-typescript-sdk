@@ -11,6 +11,27 @@ import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 
+export const GET_MORE_TOOLS_NAME = "get_more_tools" as const;
+
+export function getReportMissingToolDescriptor() {
+  return {
+    name: GET_MORE_TOOLS_NAME,
+    description:
+      "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        context: {
+          type: "string",
+          description:
+            "A description of your goal and what kind of tool would help accomplish it.",
+        },
+      },
+      required: ["context"],
+    },
+  } as const;
+}
+
 export function handleReportMissing(args: { context: string }) {
   writeToLog(`Missing tool reported: ${JSON.stringify(args)}`);
 
@@ -105,22 +126,12 @@ export function setupMCPCatTools(server: MCPServerLike): void {
 
       // Add report_missing tool if enabled
       if (data.options.enableReportMissing) {
-        tools.push({
-          name: "get_more_tools",
-          description:
-            "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
-          inputSchema: {
-            type: "object",
-            properties: {
-              context: {
-                type: "string",
-                description:
-                  "A description of your goal and what kind of tool would help accomplish it.",
-              },
-            },
-            required: ["context"],
-          },
-        });
+        const alreadyPresent = tools.some(
+          (t: any) => t?.name === GET_MORE_TOOLS_NAME,
+        );
+        if (!alreadyPresent) {
+          tools.push(getReportMissingToolDescriptor());
+        }
       }
 
       event.response = { tools };

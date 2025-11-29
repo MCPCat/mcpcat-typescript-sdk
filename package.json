@@ -66,15 +66,15 @@
     "prettier": "^3.5.3",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
-    "vitest": "^4.0.14"
+    "vitest": "^4.0.14",
+    "zod": "^3.25 || ^4.0"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": ">=1.11"
   },
   "dependencies": {
     "@opentelemetry/otlp-transformer": "^0.203.0",
-    "mcpcat-api": "0.1.6",
-    "zod": "^3.25 || ^4.0"
+    "mcpcat-api": "0.1.6"
   },
   "lint-staged": {
     "*.{ts,js}": [

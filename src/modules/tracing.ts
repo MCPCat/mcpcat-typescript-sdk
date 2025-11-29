@@ -18,6 +18,10 @@ import { publishEvent } from "./eventQueue.js";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { captureException } from "./exceptions.js";
 import { addContextParameterToTools } from "./context-parameters.js";
+import {
+  GET_MORE_TOOLS_NAME,
+  getReportMissingToolDescriptor,
+} from "./tools.js";
 
 function isToolResultError(result: any): boolean {
   return result && typeof result === "object" && result.isError === true;
@@ -77,6 +81,14 @@ export function setupListToolsTracing(
             tools,
             data.options.customContextDescription,
           );
+        }
+
+        // Add get_more_tools tool when enabled
+        if (data?.options.enableReportMissing) {
+          const alreadyPresent = tools.some(
+            (t: any) => t?.name === GET_MORE_TOOLS_NAME,
+          );
+          if (!alreadyPresent) tools.push(getReportMissingToolDescriptor());
         }
       } catch (error) {
         // If original handler fails, start with empty tools

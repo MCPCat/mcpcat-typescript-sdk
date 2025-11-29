@@ -14,9 +14,7 @@ import { publishEvent } from "./eventQueue.js";
 import { handleReportMissing } from "./tools.js";
 import { setupInitializeTracing, setupListToolsTracing } from "./tracing.js";
 import { captureException } from "./exceptions.js";
-// Note: z is imported only for get_more_tools registration (MCP SDK requires Zod for validation)
-// MCPCat no longer modifies Zod schemas - context injection happens after JSON Schema conversion
-import { z } from "zod";
+// Note: No Zod import; we use JSON Schema directly for tool registration.
 
 // WeakMap to track which callbacks have already been wrapped
 const wrappedCallbacks = new WeakMap<Function, boolean>();
@@ -237,21 +235,25 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
   }
 }
 
-function addMCPcatToolsToServer(server: HighLevelMCPServerLike): void {
+function _addMCPcatToolsToServer(server: HighLevelMCPServerLike): void {
   try {
     const data = getServerTrackingData(server.server as MCPServerLike);
     if (!data || !data.options.enableReportMissing) {
       return;
     }
 
-    // Zod schema for get_more_tools (MCP SDK requires Zod for argument validation)
+    // JSON Schema for get_more_tools
     const getMoreToolsSchema = {
-      context: z
-        .string()
-        .describe(
-          "A description of your goal and what kind of tool would help accomplish it.",
-        ),
-    };
+      type: "object",
+      properties: {
+        context: {
+          type: "string",
+          description:
+            "A description of your goal and what kind of tool would help accomplish it.",
+        },
+      },
+      required: ["context"],
+    } as const;
 
     // Use registerTool if available, otherwise fall back to direct assignment
     if (server.registerTool) {
@@ -454,7 +456,32 @@ function createToolsCallWrapper(
       );
     }
 
-    // Execute the tool (this should always happen, even if tracing setup failed)
+    // If this is get_more_tools, handle it directly without relying on server registration
+    if (request?.params?.name === "get_more_tools") {
+      try {
+        const result = await handleReportMissing({
+          context: request?.params?.arguments?.context,
+        });
+
+        if (event && shouldPublishEvent) {
+          event.userIntent = request?.params?.arguments?.context;
+          event.response = result;
+          event.duration = new Date().getTime() - startTime.getTime();
+          publishEvent(server, event);
+        }
+        return result;
+      } catch (error) {
+        if (event && shouldPublishEvent) {
+          event.isError = true;
+          event.error = captureException(error);
+          event.duration = new Date().getTime() - startTime.getTime();
+          publishEvent(server, event);
+        }
+        throw error;
+      }
+    }
+
+    // Execute other tools (even if tracing setup failed)
     try {
       const result = await originalHandler(request, extra);
 
@@ -499,17 +526,12 @@ function createToolsCallWrapper(
 
 export function setupTracking(server: HighLevelMCPServerLike): void {
   try {
-    const mcpcatData = getServerTrackingData(server.server);
+    const _mcpcatData = getServerTrackingData(server.server);
 
     // Setup handler wrapping before any tools are registered
     setupToolsCallHandlerWrapping(server);
 
     setupInitializeTracing(server);
-
-    // Add MCPcat tools for reporting missing tools FIRST
-    if (mcpcatData?.options.enableReportMissing) {
-      addMCPcatToolsToServer(server);
-    }
 
     // Modify existing callbacks to include tracing and publishing events
     // This now includes get_more_tools if it was added
