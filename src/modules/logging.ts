@@ -48,7 +48,7 @@ export function writeToLog(message: string): void {
   // Edge environment: use console.error as fallback (stderr, not stdout)
   // This is critical for MCP servers using stdio transport
   if (useConsoleFallback) {
-    console.error(`[mcpcat] ${logEntry}`);
+    console.log(`[mcpcat] ${logEntry}`);
     return;
   }
 
