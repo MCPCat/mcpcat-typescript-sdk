@@ -1,5 +1,4 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
 import {
   HighLevelMCPServerLike,
   MCPServerLike,
@@ -12,11 +11,10 @@ import { getServerTrackingData, handleIdentify } from "./internal.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
-import { addContextParameterToTool } from "./context-parameters.js";
 import { handleReportMissing } from "./tools.js";
-import { getObjectShape, getLiteralValue } from "./zod-compat.js";
 import { setupInitializeTracing, setupListToolsTracing } from "./tracing.js";
 import { captureException } from "./exceptions.js";
+// Note: No Zod import; we use JSON Schema directly for tool registration.
 
 // WeakMap to track which callbacks have already been wrapped
 const wrappedCallbacks = new WeakMap<Function, boolean>();
@@ -28,20 +26,92 @@ function isToolResultError(result: any): boolean {
   return result && typeof result === "object" && result.isError === true;
 }
 
-function addContextParametersToToolRegistry(
-  tools: Record<string, RegisteredTool>,
-  customContextDescription?: string,
-): Record<string, RegisteredTool> {
-  return Object.fromEntries(
-    Object.entries(tools).map(([name, tool]) => [
-      name,
-      // Skip get_more_tools - it has its own context parameter
-      name === "get_more_tools"
-        ? tool
-        : addContextParameterToTool(tool, customContextDescription),
-    ]),
-  );
+// --- Minimal Zod internal property helpers (no zod import needed) ---
+// These access internal properties to extract method names from MCP SDK schemas
+
+interface ZodV3Internal {
+  _def?: {
+    value?: unknown;
+    values?: unknown[]; // For enums - some Zod versions store literal values here
+    shape?: Record<string, unknown> | (() => Record<string, unknown>);
+  };
+  shape?: Record<string, unknown> | (() => Record<string, unknown>);
 }
+
+interface ZodV4Internal {
+  _zod?: {
+    def?: {
+      value?: unknown;
+      values?: unknown[]; // For enums - some Zod versions store literal values here
+      shape?: Record<string, unknown> | (() => Record<string, unknown>);
+    };
+  };
+}
+
+function isZ4Schema(schema: unknown): boolean {
+  if (!schema || typeof schema !== "object") return false;
+  return !!(schema as ZodV4Internal)._zod;
+}
+
+function getObjectShape(schema: unknown): Record<string, unknown> | undefined {
+  if (!schema || typeof schema !== "object") return undefined;
+
+  let rawShape:
+    | Record<string, unknown>
+    | (() => Record<string, unknown>)
+    | undefined;
+
+  if (isZ4Schema(schema)) {
+    const v4Schema = schema as ZodV4Internal;
+    rawShape = v4Schema._zod?.def?.shape;
+  } else {
+    const v3Schema = schema as ZodV3Internal;
+    // Try .shape first, then fall back to _def.shape (some v3 schema types store it there)
+    rawShape = v3Schema.shape ?? v3Schema._def?.shape;
+  }
+
+  if (!rawShape) return undefined;
+
+  if (typeof rawShape === "function") {
+    try {
+      return rawShape();
+    } catch {
+      return undefined;
+    }
+  }
+
+  return rawShape;
+}
+
+function getLiteralValue(schema: unknown): unknown {
+  if (!schema || typeof schema !== "object") return undefined;
+
+  if (isZ4Schema(schema)) {
+    const v4Schema = schema as ZodV4Internal;
+    const def = v4Schema._zod?.def;
+    if (def?.value !== undefined) return def.value;
+    // Fallback: values array (for enums)
+    if (Array.isArray(def?.values) && def.values.length > 0) {
+      return def.values[0];
+    }
+  } else {
+    const v3Schema = schema as ZodV3Internal;
+    const def = v3Schema._def;
+    if (def?.value !== undefined) return def.value;
+    // Fallback: values array (for enums)
+    if (Array.isArray(def?.values) && def.values.length > 0) {
+      return def.values[0];
+    }
+  }
+
+  // Final fallback: direct .value property (some Zod versions)
+  const directValue = (schema as { value?: unknown }).value;
+  if (directValue !== undefined) return directValue;
+
+  return undefined;
+}
+
+// --- End of Zod helpers ---
 
 function addTracingToToolRegistry(
   tools: Record<string, RegisteredTool>,
@@ -50,7 +120,7 @@ function addTracingToToolRegistry(
   return Object.fromEntries(
     Object.entries(tools).map(([name, tool]) => [
       name,
-      addTracingToToolCallback(tool, name, server),
+      addTracingToToolCallbackInternal(tool, name, server),
     ]),
   );
 }
@@ -96,19 +166,8 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
               return Reflect.set(target, property, value);
             }
 
-            // Apply context parameter injection if enabled (skip get_more_tools since it has its own context)
-            if (
-              data.options.enableToolCallContext &&
-              property !== "get_more_tools"
-            ) {
-              value = addContextParameterToTool(
-                value,
-                data.options.customContextDescription,
-              );
-            }
-
-            // Apply tracing to the callback
-            value = addTracingToToolCallback(value, property, server);
+            // Apply tracing to the callback (context injection happens in setupListToolsTracing)
+            value = addTracingToToolCallbackInternal(value, property, server);
 
             // After adding a tool, try to set up list tools tracing
             // This handles the case where track() is called before tools are registered
@@ -120,7 +179,7 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
               value.update = function (...updateArgs: any[]) {
                 // If callback is being updated, wrap the new callback
                 if (updateArgs[0] && updateArgs[0].callback) {
-                  updateArgs[0].callback = addTracingToToolCallback(
+                  updateArgs[0].callback = addTracingToToolCallbackInternal(
                     { callback: updateArgs[0].callback },
                     property,
                     server,
@@ -176,62 +235,7 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
   }
 }
 
-function addMCPcatToolsToServer(server: HighLevelMCPServerLike): void {
-  try {
-    const data = getServerTrackingData(server.server as MCPServerLike);
-    if (!data || !data.options.enableReportMissing) {
-      return;
-    }
-
-    // Use registerTool if available, otherwise fall back to direct assignment
-    if (server.registerTool) {
-      // Use the MCP SDK registerTool syntax: (name, config, handler)
-      server.registerTool(
-        "get_more_tools",
-        {
-          description:
-            "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
-          inputSchema: {
-            context: z
-              .string()
-              .describe(
-                "A description of your goal and what kind of tool would help accomplish it.",
-              ),
-          },
-        },
-        (args: { context: string }) => {
-          return handleReportMissing({
-            context: args.context,
-          });
-        },
-      );
-    } else {
-      // Fallback to direct assignment for compatibility
-      server._registeredTools["get_more_tools"] = {
-        description:
-          "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
-        inputSchema: {
-          context: z
-            .string()
-            .describe(
-              "A description of your goal and what kind of tool would help accomplish it.",
-            ),
-        },
-        callback: (args: { context: string }) => {
-          return handleReportMissing({
-            context: args.context,
-          });
-        },
-      };
-    }
-
-    writeToLog("Successfully added MCPcat tools to server");
-  } catch (error) {
-    writeToLog(`Warning: Failed to add MCPcat tools - ${error}`);
-  }
-}
-
-function addTracingToToolCallback(
+function addTracingToToolCallbackInternal(
   tool: RegisteredTool,
   toolName: string,
   _server: HighLevelMCPServerLike,
@@ -396,7 +400,32 @@ function createToolsCallWrapper(
       );
     }
 
-    // Execute the tool (this should always happen, even if tracing setup failed)
+    // If this is get_more_tools, handle it directly without relying on server registration
+    if (request?.params?.name === "get_more_tools") {
+      try {
+        const result = await handleReportMissing({
+          context: request?.params?.arguments?.context,
+        });
+
+        if (event && shouldPublishEvent) {
+          event.userIntent = request?.params?.arguments?.context;
+          event.response = result;
+          event.duration = new Date().getTime() - startTime.getTime();
+          publishEvent(server, event);
+        }
+        return result;
+      } catch (error) {
+        if (event && shouldPublishEvent) {
+          event.isError = true;
+          event.error = captureException(error);
+          event.duration = new Date().getTime() - startTime.getTime();
+          publishEvent(server, event);
+        }
+        throw error;
+      }
+    }
+
+    // Execute other tools (even if tracing setup failed)
     try {
       const result = await originalHandler(request, extra);
 
@@ -441,24 +470,12 @@ function createToolsCallWrapper(
 
 export function setupTracking(server: HighLevelMCPServerLike): void {
   try {
-    const mcpcatData = getServerTrackingData(server.server);
+    const _mcpcatData = getServerTrackingData(server.server);
 
     // Setup handler wrapping before any tools are registered
     setupToolsCallHandlerWrapping(server);
 
     setupInitializeTracing(server);
-    // Modify existing tools to include context parameters in their inputSchemas
-    if (mcpcatData?.options.enableToolCallContext) {
-      server._registeredTools = addContextParametersToToolRegistry(
-        server._registeredTools,
-        mcpcatData.options.customContextDescription,
-      );
-    }
-
-    // Add MCPcat tools for reporting missing tools FIRST
-    if (mcpcatData?.options.enableReportMissing) {
-      addMCPcatToolsToServer(server);
-    }
 
     // Modify existing callbacks to include tracing and publishing events
     // This now includes get_more_tools if it was added
@@ -469,7 +486,8 @@ export function setupTracking(server: HighLevelMCPServerLike): void {
 
     setupListToolsTracing(server);
 
-    // Proxy the high level server's registered tools to ensure new tools are injected with context parameters and tracing
+    // Proxy the high level server's registered tools to ensure new tools are injected with tracing
+    // Note: Context parameter injection now happens in setupListToolsTracing (after JSON Schema conversion)
     setupListenerToRegisteredTools(server);
   } catch (error) {
     writeToLog(`Warning: Failed to setup tool call tracing - ${error}`);

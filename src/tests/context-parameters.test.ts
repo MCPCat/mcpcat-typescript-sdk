@@ -242,7 +242,7 @@ describe("Context Parameters", () => {
       await eventCapture.stop();
     });
 
-    it("should fail when context parameter is missing", async () => {
+    it("should capture userIntent only when context is provided", async () => {
       // Set up event capture
       const eventCapture = new EventCapture();
       await eventCapture.start();
@@ -252,47 +252,23 @@ describe("Context Parameters", () => {
         enableToolCallContext: true,
       });
 
-      // Call list_todos without context - should fail
-      // Note: SDK <1.21.0 throws exceptions, SDK >=1.21.0 returns error responses
-      try {
-        const result1 = await client.request(
-          {
-            method: "tools/call",
-            params: {
-              name: "list_todos",
-              arguments: {},
-            },
+      // Call list_todos without context - should succeed but have no userIntent
+      // Note: Context is advertised as required in JSON Schema (for client/LLM),
+      // but not enforced at SDK validation level (Zod schema is not modified)
+      const result1 = await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "list_todos",
+            arguments: {},
           },
-          CallToolResultSchema,
-        );
-        // SDK 1.21.0+ behavior: returns error response
-        expect(result1.isError).toBe(true);
-      } catch (error) {
-        // SDK <1.21.0 behavior: throws exception
-        expect(error).toBeDefined();
-      }
+        },
+        CallToolResultSchema,
+      );
+      expect(result1.content[0].text).toBeDefined();
 
-      // Call with empty context - should also fail
-      try {
-        const result2 = await client.request(
-          {
-            method: "tools/call",
-            params: {
-              name: "list_todos",
-              arguments: {},
-            },
-          },
-          CallToolResultSchema,
-        );
-        // SDK 1.21.0+ behavior: returns error response
-        expect(result2.isError).toBe(true);
-      } catch (error) {
-        // SDK <1.21.0 behavior: throws exception
-        expect(error).toBeDefined();
-      }
-
-      // Call with valid context - should succeed
-      const result = await client.request(
+      // Call with valid context - should succeed and capture userIntent
+      const result2 = await client.request(
         {
           method: "tools/call",
           params: {
@@ -305,24 +281,31 @@ describe("Context Parameters", () => {
         CallToolResultSchema,
       );
 
-      expect(result.content[0].text).toBeDefined();
+      expect(result2.content[0].text).toBeDefined();
 
       // Wait for events to be processed
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Verify the event was published with userIntent
+      // Verify events were published
       const events = eventCapture.getEvents();
-      const listEvent = events.find(
+      const listEvents = events.filter(
         (e) =>
           e.eventType === PublishEventRequestEventTypeEnum.mcpToolsCall &&
-          e.resourceName === "list_todos" &&
-          !e.isError, // Find the successful event, not the validation errors
+          e.resourceName === "list_todos",
       );
 
-      expect(listEvent).toBeDefined();
-      expect(listEvent?.userIntent).toBe(
-        "Listing todos to check current status",
+      // Should have at least 2 events (one without context, one with)
+      expect(listEvents.length).toBeGreaterThanOrEqual(2);
+
+      // Find event without context - should have no userIntent
+      const eventWithoutContext = listEvents.find((e) => !e.userIntent);
+      expect(eventWithoutContext).toBeDefined();
+
+      // Find event with context - should have userIntent
+      const eventWithContext = listEvents.find(
+        (e) => e.userIntent === "Listing todos to check current status",
       );
+      expect(eventWithContext).toBeDefined();
 
       await eventCapture.stop();
     });
