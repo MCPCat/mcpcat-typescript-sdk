@@ -32,15 +32,17 @@ jobs:
         with:
           version: 9
 
-      - name: Fetch all available MCP SDK versions (≥1.11)
+      - name: Fetch all available MCP SDK versions (≥1.11, <1.24)
         id: get-versions
         run: |
-          # Get all versions >= 1.11 and filter to get latest patch for each minor version
+          # Get all versions >= 1.11 and < 1.24, filter to get latest patch for each minor version
+          # Note: Versions 1.24+ have known compatibility issues
           VERSIONS=$(pnpm view @modelcontextprotocol/sdk versions --json | jq -c '
             map(select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))) |
             map(select(
-              (split(".")[0] | tonumber > 1) or
-              ((split(".")[0] | tonumber == 1) and (split(".")[1] | tonumber >= 11))
+              (split(".")[0] | tonumber == 1) and
+              (split(".")[1] | tonumber >= 11) and
+              (split(".")[1] | tonumber < 24)
             )) |
             group_by(split(".")[0:2] | join(".")) |
             map(max_by(split(".") | map(tonumber))) |
