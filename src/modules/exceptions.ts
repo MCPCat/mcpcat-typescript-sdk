@@ -1,3 +1,4 @@
+import { createRequire } from "module";
 import { ErrorData, StackFrame, ChainedErrorData } from "../types.js";
 
 // Lazy-loaded fs module for context_line extraction (Node.js only)
@@ -9,6 +10,9 @@ function getFsSync(): typeof import("fs") | null {
   if (!fsInitAttempted) {
     fsInitAttempted = true;
     try {
+      // Use createRequire for ESM compatibility
+      // Works in Node.js ESM/CJS, fails gracefully in Workers/edge environments
+      const require = createRequire(import.meta.url);
       fsModule = require("fs");
     } catch {
       fsModule = null;
