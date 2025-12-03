@@ -235,62 +235,6 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
   }
 }
 
-function _addMCPcatToolsToServer(server: HighLevelMCPServerLike): void {
-  try {
-    const data = getServerTrackingData(server.server as MCPServerLike);
-    if (!data || !data.options.enableReportMissing) {
-      return;
-    }
-
-    // JSON Schema for get_more_tools
-    const getMoreToolsSchema = {
-      type: "object",
-      properties: {
-        context: {
-          type: "string",
-          description:
-            "A description of your goal and what kind of tool would help accomplish it.",
-        },
-      },
-      required: ["context"],
-    } as const;
-
-    // Use registerTool if available, otherwise fall back to direct assignment
-    if (server.registerTool) {
-      // Use the MCP SDK registerTool syntax: (name, config, handler)
-      server.registerTool(
-        "get_more_tools",
-        {
-          description:
-            "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
-          inputSchema: getMoreToolsSchema,
-        },
-        (args: { context: string }) => {
-          return handleReportMissing({
-            context: args.context,
-          });
-        },
-      );
-    } else {
-      // Fallback to direct assignment for compatibility
-      server._registeredTools["get_more_tools"] = {
-        description:
-          "Check for additional tools whenever your task might benefit from specialized capabilities - even if existing tools could work as a fallback.",
-        inputSchema: getMoreToolsSchema,
-        callback: (args: { context: string }) => {
-          return handleReportMissing({
-            context: args.context,
-          });
-        },
-      };
-    }
-
-    writeToLog("Successfully added MCPcat tools to server");
-  } catch (error) {
-    writeToLog(`Warning: Failed to add MCPcat tools - ${error}`);
-  }
-}
-
 function addTracingToToolCallbackInternal(
   tool: RegisteredTool,
   toolName: string,

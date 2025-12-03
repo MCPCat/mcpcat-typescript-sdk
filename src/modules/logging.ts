@@ -45,8 +45,6 @@ export function writeToLog(message: string): void {
   const timestamp = new Date().toISOString();
   const logEntry = `[${timestamp}] ${message}`;
 
-  // Edge environment: use console.error as fallback (stderr, not stdout)
-  // This is critical for MCP servers using stdio transport
   if (useConsoleFallback) {
     console.log(`[mcpcat] ${logEntry}`);
     return;
