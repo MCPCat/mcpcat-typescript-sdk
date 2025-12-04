@@ -14,7 +14,13 @@ import { publishEvent } from "./eventQueue.js";
 import { handleReportMissing } from "./tools.js";
 import { setupInitializeTracing, setupListToolsTracing } from "./tracing.js";
 import { captureException } from "./exceptions.js";
-// Note: No Zod import; we use JSON Schema directly for tool registration.
+import {
+  getToolFunction,
+  hasToolFunction,
+  createWrappedTool,
+  getObjectShape,
+  getLiteralValue,
+} from "./mcp-sdk-compat.js";
 
 // WeakMap to track which callbacks have already been wrapped
 const wrappedCallbacks = new WeakMap<Function, boolean>();
@@ -25,93 +31,6 @@ const MCPCAT_PROCESSED = Symbol("__mcpcat_processed__");
 function isToolResultError(result: any): boolean {
   return result && typeof result === "object" && result.isError === true;
 }
-
-// --- Minimal Zod internal property helpers (no zod import needed) ---
-// These access internal properties to extract method names from MCP SDK schemas
-
-interface ZodV3Internal {
-  _def?: {
-    value?: unknown;
-    values?: unknown[]; // For enums - some Zod versions store literal values here
-    shape?: Record<string, unknown> | (() => Record<string, unknown>);
-  };
-  shape?: Record<string, unknown> | (() => Record<string, unknown>);
-}
-
-interface ZodV4Internal {
-  _zod?: {
-    def?: {
-      value?: unknown;
-      values?: unknown[]; // For enums - some Zod versions store literal values here
-      shape?: Record<string, unknown> | (() => Record<string, unknown>);
-    };
-  };
-}
-
-function isZ4Schema(schema: unknown): boolean {
-  if (!schema || typeof schema !== "object") return false;
-  return !!(schema as ZodV4Internal)._zod;
-}
-
-function getObjectShape(schema: unknown): Record<string, unknown> | undefined {
-  if (!schema || typeof schema !== "object") return undefined;
-
-  let rawShape:
-    | Record<string, unknown>
-    | (() => Record<string, unknown>)
-    | undefined;
-
-  if (isZ4Schema(schema)) {
-    const v4Schema = schema as ZodV4Internal;
-    rawShape = v4Schema._zod?.def?.shape;
-  } else {
-    const v3Schema = schema as ZodV3Internal;
-    // Try .shape first, then fall back to _def.shape (some v3 schema types store it there)
-    rawShape = v3Schema.shape ?? v3Schema._def?.shape;
-  }
-
-  if (!rawShape) return undefined;
-
-  if (typeof rawShape === "function") {
-    try {
-      return rawShape();
-    } catch {
-      return undefined;
-    }
-  }
-
-  return rawShape;
-}
-
-function getLiteralValue(schema: unknown): unknown {
-  if (!schema || typeof schema !== "object") return undefined;
-
-  if (isZ4Schema(schema)) {
-    const v4Schema = schema as ZodV4Internal;
-    const def = v4Schema._zod?.def;
-    if (def?.value !== undefined) return def.value;
-    // Fallback: values array (for enums)
-    if (Array.isArray(def?.values) && def.values.length > 0) {
-      return def.values[0];
-    }
-  } else {
-    const v3Schema = schema as ZodV3Internal;
-    const def = v3Schema._def;
-    if (def?.value !== undefined) return def.value;
-    // Fallback: values array (for enums)
-    if (Array.isArray(def?.values) && def.values.length > 0) {
-      return def.values[0];
-    }
-  }
-
-  // Final fallback: direct .value property (some Zod versions)
-  const directValue = (schema as { value?: unknown }).value;
-  if (directValue !== undefined) return directValue;
-
-  return undefined;
-}
-
-// --- End of Zod helpers ---
 
 function addTracingToToolRegistry(
   tools: Record<string, RegisteredTool>,
@@ -141,12 +60,12 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
         value: RegisteredTool,
       ): boolean {
         try {
-          // Check if this is a tool being registered (has callback property)
+          // Check if this is a tool being registered (has callback or handler property)
           if (
             typeof property === "string" &&
             value &&
             typeof value === "object" &&
-            "callback" in value
+            hasToolFunction(value)
           ) {
             // Check if tool has already been processed
             if ((value as any)[MCPCAT_PROCESSED]) {
@@ -157,8 +76,8 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
               return Reflect.set(target, property, value);
             }
 
-            // Check if callback is already wrapped
-            if (wrappedCallbacks.has(value.callback)) {
+            // Check if callback/handler is already wrapped
+            if (wrappedCallbacks.has(getToolFunction(value))) {
               writeToLog(
                 `Tool ${String(property)} callback already wrapped, skipping proxy wrapping`,
               );
@@ -178,12 +97,20 @@ function setupListenerToRegisteredTools(server: HighLevelMCPServerLike): void {
               const originalUpdate = value.update;
               value.update = function (...updateArgs: any[]) {
                 // If callback is being updated, wrap the new callback
-                if (updateArgs[0] && updateArgs[0].callback) {
-                  updateArgs[0].callback = addTracingToToolCallbackInternal(
-                    { callback: updateArgs[0].callback },
-                    property,
-                    server,
-                  ).callback;
+                // Note: MCP SDK's update() method API uses "callback" property in its interface
+                if (updateArgs[0]) {
+                  const updateObj = updateArgs[0];
+                  if (
+                    updateObj.callback &&
+                    typeof updateObj.callback === "function"
+                  ) {
+                    const wrappedTool = addTracingToToolCallbackInternal(
+                      { callback: updateObj.callback } as RegisteredTool,
+                      property,
+                      server,
+                    );
+                    updateObj.callback = getToolFunction(wrappedTool);
+                  }
                 }
                 return originalUpdate.apply(this, updateArgs);
               };
@@ -240,7 +167,7 @@ function addTracingToToolCallbackInternal(
   toolName: string,
   _server: HighLevelMCPServerLike,
 ): RegisteredTool {
-  const originalCallback = tool.callback;
+  const originalCallback = getToolFunction(tool);
 
   if (wrappedCallbacks.has(originalCallback)) {
     writeToLog(`Tool ${toolName} callback already wrapped, skipping re-wrap`);
@@ -304,11 +231,8 @@ function addTracingToToolCallbackInternal(
   // Mark the wrapped callback as well (in case it gets re-wrapped)
   wrappedCallbacks.set(wrappedCallback, true);
 
-  // Create a new tool object with the wrapped callback
-  const wrappedTool = {
-    ...tool,
-    callback: wrappedCallback as RegisteredTool["callback"],
-  };
+  // Create a new tool object with the wrapped callback, preserving the property name
+  const wrappedTool = createWrappedTool(tool, wrappedCallback);
 
   // Mark the tool as processed
   (wrappedTool as any)[MCPCAT_PROCESSED] = true;
