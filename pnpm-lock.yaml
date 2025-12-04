@@ -25,8 +25,8 @@ importers:
         specifier: ^2.29.8
         version: 2.29.8(@types/node@22.15.21)
       "@modelcontextprotocol/sdk":
-        specifier: ~1.23.0
-        version: 1.23.0(zod@3.25.30)
+        specifier: ~1.24.2
+        version: 1.24.2(zod@3.25.30)
       "@types/node":
         specifier: ^22.15.21
         version: 22.15.21
@@ -630,10 +630,10 @@ packages:
         integrity: sha512-fo+QhuU3qE/2TQMQmbVMqaQ6EWbMhi4ABWP+O4AM1NqPBuy0OrApV5LO6BrrgnhtAHS2NH6RrVk9OL181tTi8A==,
       }
 
-  "@modelcontextprotocol/sdk@1.23.0":
+  "@modelcontextprotocol/sdk@1.24.2":
     resolution:
       {
-        integrity: sha512-MCGd4K9aZKvuSqdoBkdMvZNcYXCkZRYVs/Gh92mdV5IHbctX9H9uIvd4X93+9g8tBbXv08sxc/QHXTzf8y65bA==,
+        integrity: sha512-hS/kzSfchqzvUeJUsdiDHi84/kNhLIZaZ6coGQVwbYIelOBbcAwUohUfaQTLa1MvFOK/jbTnGFzraHSFwB7pjQ==,
       }
     engines: { node: ">=18" }
     peerDependencies:
@@ -2251,13 +2251,6 @@ packages:
         integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==,
       }
 
-  http-errors@2.0.0:
-    resolution:
-      {
-        integrity: sha512-FtwrG/euBzaEjYeRqOgly7G0qviiXoJWnvEH2Z1plBdXgbyjv34pHTSb9zoeHMyDy33+DWy5Wt9Wo+TURtOYSQ==,
-      }
-    engines: { node: ">= 0.8" }
-
   http-errors@2.0.1:
     resolution:
       {
@@ -2279,13 +2272,6 @@ packages:
       }
     engines: { node: ">=18" }
     hasBin: true
-
-  iconv-lite@0.6.3:
-    resolution:
-      {
-        integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==,
-      }
-    engines: { node: ">=0.10.0" }
 
   iconv-lite@0.7.0:
     resolution:
@@ -2435,6 +2421,12 @@ packages:
     resolution:
       {
         integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==,
+      }
+
+  jose@6.1.3:
+    resolution:
+      {
+        integrity: sha512-0TpaTfihd4QMNwrz/ob2Bp7X04yuxJkjRGi4aKmOqwhov54i6u79oCv7T+C7lo70MKH6BesI3vscD1yb/yzKXQ==,
       }
 
   joycon@3.1.1:
@@ -3082,13 +3074,6 @@ packages:
       }
     engines: { node: ">= 0.6" }
 
-  raw-body@3.0.0:
-    resolution:
-      {
-        integrity: sha512-RmkhL8CAyCRPXCE28MMH0z2PNWQBNk2Q09ZdxM9IOOXwxwZbN+qbWaatPkdkWIKL2ZVDImrN/pK5HTRz2PcS4g==,
-      }
-    engines: { node: ">= 0.8" }
-
   raw-body@3.0.2:
     resolution:
       {
@@ -3328,13 +3313,6 @@ packages:
       {
         integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==,
       }
-
-  statuses@2.0.1:
-    resolution:
-      {
-        integrity: sha512-RwNA9Z/7PrK06rYLIzFMlaF+l73iwpzsqRIFgbMLbTcLD6cOao82TaWefPXQvB2fOC4AjuYSEndS7N/mTCbkdQ==,
-      }
-    engines: { node: ">= 0.8" }
 
   statuses@2.0.2:
     resolution:
@@ -4133,7 +4111,7 @@ snapshots:
       globby: 11.1.0
       read-yaml-file: 1.1.0
 
-  "@modelcontextprotocol/sdk@1.23.0(zod@3.25.30)":
+  "@modelcontextprotocol/sdk@1.24.2(zod@3.25.30)":
     dependencies:
       ajv: 8.17.1
       ajv-formats: 3.0.1(ajv@8.17.1)
@@ -4144,8 +4122,9 @@ snapshots:
       eventsource-parser: 3.0.3
       express: 5.1.0
       express-rate-limit: 7.5.1(express@5.1.0)
+      jose: 6.1.3
       pkce-challenge: 5.0.0
-      raw-body: 3.0.0
+      raw-body: 3.0.2
       zod: 3.25.30
       zod-to-json-schema: 3.25.0(zod@3.25.30)
     transitivePeerDependencies:
@@ -4604,7 +4583,7 @@ snapshots:
       bytes: 3.1.2
       content-type: 1.0.5
       debug: 4.4.3
-      http-errors: 2.0.0
+      http-errors: 2.0.1
       iconv-lite: 0.7.0
       on-finished: 2.4.1
       qs: 6.14.0
@@ -4886,13 +4865,13 @@ snapshots:
       content-type: 1.0.5
       cookie: 0.7.2
       cookie-signature: 1.2.2
-      debug: 4.4.1
+      debug: 4.4.3
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
       finalhandler: 2.1.0
       fresh: 2.0.0
-      http-errors: 2.0.0
+      http-errors: 2.0.1
       merge-descriptors: 2.0.0
       mime-types: 3.0.1
       on-finished: 2.4.1
@@ -4904,7 +4883,7 @@ snapshots:
       router: 2.2.0
       send: 1.2.0
       serve-static: 2.2.0
-      statuses: 2.0.1
+      statuses: 2.0.2
       type-is: 2.0.1
       vary: 1.1.2
     transitivePeerDependencies:
@@ -4952,12 +4931,12 @@ snapshots:
 
   finalhandler@2.1.0:
     dependencies:
-      debug: 4.4.1
+      debug: 4.4.3
       encodeurl: 2.0.0
       escape-html: 1.0.3
       on-finished: 2.4.1
       parseurl: 1.3.3
-      statuses: 2.0.1
+      statuses: 2.0.2
     transitivePeerDependencies:
       - supports-color
 
@@ -5074,14 +5053,6 @@ snapshots:
 
   html-escaper@2.0.2: {}
 
-  http-errors@2.0.0:
-    dependencies:
-      depd: 2.0.0
-      inherits: 2.0.4
-      setprototypeof: 1.2.0
-      statuses: 2.0.1
-      toidentifier: 1.0.1
-
   http-errors@2.0.1:
     dependencies:
       depd: 2.0.0
@@ -5093,10 +5064,6 @@ snapshots:
   human-id@4.1.1: {}
 
   husky@9.1.7: {}
-
-  iconv-lite@0.6.3:
-    dependencies:
-      safer-buffer: 2.1.2
 
   iconv-lite@0.7.0:
     dependencies:
@@ -5169,6 +5136,8 @@ snapshots:
       "@isaacs/cliui": 8.0.2
     optionalDependencies:
       "@pkgjs/parseargs": 0.11.0
+
+  jose@6.1.3: {}
 
   joycon@3.1.1: {}
 
@@ -5486,13 +5455,6 @@ snapshots:
 
   range-parser@1.2.1: {}
 
-  raw-body@3.0.0:
-    dependencies:
-      bytes: 3.1.2
-      http-errors: 2.0.0
-      iconv-lite: 0.6.3
-      unpipe: 1.0.0
-
   raw-body@3.0.2:
     dependencies:
       bytes: 3.1.2
@@ -5580,7 +5542,7 @@ snapshots:
 
   router@2.2.0:
     dependencies:
-      debug: 4.4.1
+      debug: 4.4.3
       depd: 2.0.0
       is-promise: 4.0.0
       parseurl: 1.3.3
@@ -5600,17 +5562,17 @@ snapshots:
 
   send@1.2.0:
     dependencies:
-      debug: 4.4.1
+      debug: 4.4.3
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
       fresh: 2.0.0
-      http-errors: 2.0.0
+      http-errors: 2.0.1
       mime-types: 3.0.1
       ms: 2.1.3
       on-finished: 2.4.1
       range-parser: 1.2.1
-      statuses: 2.0.1
+      statuses: 2.0.2
     transitivePeerDependencies:
       - supports-color
 
@@ -5693,8 +5655,6 @@ snapshots:
       signal-exit: 4.1.0
 
   stackback@0.0.2: {}
-
-  statuses@2.0.1: {}
 
   statuses@2.0.2: {}
 
