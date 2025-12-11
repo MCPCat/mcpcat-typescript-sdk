@@ -22,12 +22,15 @@ export type ToolCallback =
       extra: CompatibleRequestHandlerExtra,
     ) => CallToolResult | Promise<CallToolResult>);
 
+// RegisteredTool type that supports both MCP SDK 1.23- (callback) and 1.24+ (handler)
 export type RegisteredTool = {
   description?: string;
   inputSchema?: any;
-  callback: ToolCallback;
   update?: (...args: any[]) => any;
-};
+} & (
+  | { callback: ToolCallback; handler?: never }
+  | { handler: ToolCallback; callback?: never }
+);
 
 export type RedactFunction = (text: string) => Promise<string>;
 
