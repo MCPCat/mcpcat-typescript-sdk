@@ -1,6 +1,6 @@
 {
   "name": "mcpcat",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Analytics tool for MCP (Model Context Protocol) servers - tracks tool usage patterns and provides insights",
   "type": "module",
   "main": "dist/index.js",
