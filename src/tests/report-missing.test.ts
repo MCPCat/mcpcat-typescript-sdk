@@ -261,7 +261,7 @@ describe("Report Missing Tool", () => {
       await eventCapture.start();
 
       // Enable tracking
-      track(server, "proj_0ujtsYcgvSTl8PAuAdqWYSMnLOv");
+      track(server, "proj_abc123xyz");
 
       const description = "Need file system watcher tool";
       const context = "User wants to monitor file changes in real-time";

@@ -8,7 +8,6 @@ import {
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
 import { writeToLog } from "./logging.js";
-import { captureException } from "./exceptions.js";
 
 /**
  * Simple LRU cache for session identities.
@@ -196,14 +195,7 @@ export async function handleIdentify(
     }
   } catch (error) {
     writeToLog(
-      `Warning: Supplied identify function threw an error while identifying session ${sessionId} - ${error}`,
+      `Error: User supplied identify function threw an error while identifying session ${sessionId} - ${error}`,
     );
-    identifyEvent.duration =
-      (identifyEvent.timestamp &&
-        new Date().getTime() - identifyEvent.timestamp.getTime()) ||
-      undefined;
-    identifyEvent.isError = true;
-    identifyEvent.error = captureException(error);
-    publishEvent(server, identifyEvent);
   }
 }
