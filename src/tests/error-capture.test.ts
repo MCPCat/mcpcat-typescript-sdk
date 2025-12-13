@@ -331,7 +331,7 @@ describe("Error Capture Integration Tests", () => {
     }
   });
 
-  it("should capture identify errors with stack traces", async () => {
+  it("should NOT publish identify events when identify function throws", async () => {
     const { server, client, cleanup } = await setupTestServerAndClient();
 
     try {
@@ -361,21 +361,19 @@ describe("Error Capture Integration Tests", () => {
       // Wait for events
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Find identify error event
+      // Verify NO identify event was published (errors in identify should only be logged, not published)
       const events = eventCapture.getEvents();
       const identifyEvent = events.find(
-        (e) =>
-          e.eventType === PublishEventRequestEventTypeEnum.McpcatIdentify &&
-          e.isError,
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.McpcatIdentify,
       );
 
-      if (identifyEvent) {
-        expect(identifyEvent.error).toBeDefined();
-        expect(identifyEvent.error!.message).toBe("Identify error");
-        expect(identifyEvent.error!.type).toBe("Error");
-        expect(identifyEvent.error!.stack).toBeDefined();
-        expect(identifyEvent.error!.frames).toBeDefined();
-      }
+      expect(identifyEvent).toBeUndefined();
+
+      // Verify the tool call event was still published
+      const toolCallEvent = events.find(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpToolsCall,
+      );
+      expect(toolCallEvent).toBeDefined();
     } finally {
       await cleanup();
     }
