@@ -1,6 +1,6 @@
 {
   "name": "mcpcat",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Analytics tool for MCP (Model Context Protocol) servers - tracks tool usage patterns and provides insights",
   "type": "module",
   "main": "dist/index.js",
@@ -74,7 +74,7 @@
   },
   "dependencies": {
     "@opentelemetry/otlp-transformer": "^0.203.0",
-    "mcpcat-api": "0.1.6"
+    "mcpcat-api": "0.1.7"
   },
   "lint-staged": {
     "*.{ts,js}": [
