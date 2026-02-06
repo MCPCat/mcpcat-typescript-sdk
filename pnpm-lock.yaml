@@ -18,8 +18,8 @@ importers:
         specifier: ^0.203.0
         version: 0.203.0(@opentelemetry/api@1.9.0)
       mcpcat-api:
-        specifier: 0.1.6
-        version: 0.1.6
+        specifier: 0.1.7
+        version: 0.1.7
     devDependencies:
       "@changesets/cli":
         specifier: ^2.29.8
@@ -2610,10 +2610,10 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
-  mcpcat-api@0.1.6:
+  mcpcat-api@0.1.7:
     resolution:
       {
-        integrity: sha512-jNnPMBa5mLClghI+KLVFwYzOTL6G02kGIut4qGzso+GgLjHYOQ7x7zy0Cw0Pkx1MCb1JMwxF8yJ76xgEwuopNQ==,
+        integrity: sha512-c8kJ5rQ68xYFT8O3bbsu68WzGEzGbmmYVcD87YuvlNRof8iy+2vM8uRuZ4kO3OEUTeDA/FA4kgI+DCjOAeO7sw==,
       }
 
   media-typer@1.1.0:
@@ -5244,7 +5244,7 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcpcat-api@0.1.6: {}
+  mcpcat-api@0.1.7: {}
 
   media-typer@1.1.0: {}
 

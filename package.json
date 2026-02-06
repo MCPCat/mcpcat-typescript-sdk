@@ -74,7 +74,7 @@
   },
   "dependencies": {
     "@opentelemetry/otlp-transformer": "^0.203.0",
-    "mcpcat-api": "0.1.6"
+    "mcpcat-api": "0.1.7"
   },
   "lint-staged": {
     "*.{ts,js}": [
