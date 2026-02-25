@@ -32,7 +32,7 @@
 
 MCPcat is an analytics platform for MCP server owners 🐱. It captures user intentions and behavior patterns to help you understand what AI users actually need from your tools — eliminating guesswork and accelerating product development all with one-line of code.
 
-This SDK also provides a free and simple way to forward telemetry like logs, traces, and errors to any Open Telemetry collector or popular tools like Datadog and Sentry. 
+This SDK also provides a free and simple way to forward telemetry like logs, traces, and errors to any Open Telemetry collector or popular tools like Datadog, Sentry, and PostHog.
 
 ```bash
 npm install -S mcpcat
@@ -49,7 +49,6 @@ Use MCPcat for:
 - **User session replay** 🎬. Follow alongside your users to understand why they're using your MCP servers, what functionality you're missing, and what clients they're coming from.
 - **Trace debugging** 🔍. See where your users are getting stuck, track and find when LLMs get confused by your API, and debug sessions across all deployments of your MCP server.
 - **Existing platform support** 📊. Get logging and tracing out of the box for your existing observability platforms (OpenTelemetry, Datadog, Sentry) — eliminating the tedious work of implementing telemetry yourself.
-
 
 <img width="1274" height="770" alt="mcpcat-diagram" src="https://github.com/user-attachments/assets/2d75de19-5b69-4f8b-aea9-43161de5a2ba" />
 
@@ -121,6 +120,11 @@ mcpcat.track(server, "proj_0000", {
       type: "sentry",
       dsn: process.env.SENTRY_DSN,
       environment: "production",
+    },
+    posthog: {
+      type: "posthog",
+      apiKey: process.env.POSTHOG_API_KEY,
+      host: "https://us.i.posthog.com", // Optional: defaults to US region
     },
   },
 });
