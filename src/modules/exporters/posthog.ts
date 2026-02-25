@@ -1,5 +1,6 @@
 import { Event, Exporter } from "../../types.js";
 import { writeToLog } from "../logging.js";
+import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 
 export interface PostHogExporterConfig {
   type: "posthog";
@@ -81,7 +82,7 @@ export class PostHogExporter implements Exporter {
 
     if (event.resourceName) {
       properties.resource_name = event.resourceName;
-      if (event.eventType === "tools/call") {
+      if (event.eventType === PublishEventRequestEventTypeEnum.mcpToolsCall) {
         properties.tool_name = event.resourceName;
       }
     }
@@ -149,7 +150,7 @@ export class PostHogExporter implements Exporter {
     // Add tool/resource context
     if (event.resourceName) {
       properties.resource_name = event.resourceName;
-      if (event.eventType === "tools/call") {
+      if (event.eventType === PublishEventRequestEventTypeEnum.mcpToolsCall) {
         properties.tool_name = event.resourceName;
       }
     }
@@ -170,15 +171,18 @@ export class PostHogExporter implements Exporter {
   private mapEventType(eventType: string): string {
     // Map MCPcat event types to PostHog event names
     const mapping: Record<string, string> = {
-      "tools/call": "mcp_tool_call",
-      "tools/list": "mcp_tools_list",
-      initialize: "mcp_initialize",
-      "resources/read": "mcp_resource_read",
-      "resources/list": "mcp_resources_list",
-      "prompts/get": "mcp_prompt_get",
-      "prompts/list": "mcp_prompts_list",
+      [PublishEventRequestEventTypeEnum.mcpToolsCall]: "mcp_tool_call",
+      [PublishEventRequestEventTypeEnum.mcpToolsList]: "mcp_tools_list",
+      [PublishEventRequestEventTypeEnum.mcpInitialize]: "mcp_initialize",
+      [PublishEventRequestEventTypeEnum.mcpResourcesRead]: "mcp_resource_read",
+      [PublishEventRequestEventTypeEnum.mcpResourcesList]: "mcp_resources_list",
+      [PublishEventRequestEventTypeEnum.mcpPromptsGet]: "mcp_prompt_get",
+      [PublishEventRequestEventTypeEnum.mcpPromptsList]: "mcp_prompts_list",
     };
 
-    return mapping[eventType] || `mcp_${eventType.replace(/\//g, "_")}`;
+    return (
+      mapping[eventType] ||
+      `mcp_${eventType.replace(/^mcp:/, "").replace(/\//g, "_")}`
+    );
   }
 }

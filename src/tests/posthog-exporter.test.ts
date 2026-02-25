@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { PostHogExporter } from "../modules/exporters/posthog.js";
 import { Event } from "../types.js";
+import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 
 describe("PostHogExporter", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
@@ -24,7 +25,7 @@ describe("PostHogExporter", () => {
       id: "evt_test123",
       sessionId: "ses_session456",
       projectId: "proj_1",
-      eventType: "tools/call",
+      eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
       timestamp: new Date("2025-01-15T10:00:00Z"),
       resourceName: "get_weather",
       serverName: "weather-server",
@@ -294,7 +295,10 @@ describe("PostHogExporter", () => {
 
     // tools/call should have tool_name
     await exporter.export(
-      makeEvent({ eventType: "tools/call", resourceName: "get_weather" }),
+      makeEvent({
+        eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
+        resourceName: "get_weather",
+      }),
     );
     let body = JSON.parse(fetchSpy.mock.calls[0][1].body);
     expect(body.batch[0].properties.tool_name).toBe("get_weather");
@@ -303,7 +307,10 @@ describe("PostHogExporter", () => {
     // resources/read should NOT have tool_name
     fetchSpy.mockClear();
     await exporter.export(
-      makeEvent({ eventType: "resources/read", resourceName: "my_resource" }),
+      makeEvent({
+        eventType: PublishEventRequestEventTypeEnum.mcpResourcesRead,
+        resourceName: "my_resource",
+      }),
     );
     body = JSON.parse(fetchSpy.mock.calls[0][1].body);
     expect(body.batch[0].properties.tool_name).toBeUndefined();
@@ -317,14 +324,14 @@ describe("PostHogExporter", () => {
     });
 
     const eventTypes: Record<string, string> = {
-      "tools/call": "mcp_tool_call",
-      "tools/list": "mcp_tools_list",
-      initialize: "mcp_initialize",
-      "resources/read": "mcp_resource_read",
-      "resources/list": "mcp_resources_list",
-      "prompts/get": "mcp_prompt_get",
-      "prompts/list": "mcp_prompts_list",
-      "custom/type": "mcp_custom_type",
+      [PublishEventRequestEventTypeEnum.mcpToolsCall]: "mcp_tool_call",
+      [PublishEventRequestEventTypeEnum.mcpToolsList]: "mcp_tools_list",
+      [PublishEventRequestEventTypeEnum.mcpInitialize]: "mcp_initialize",
+      [PublishEventRequestEventTypeEnum.mcpResourcesRead]: "mcp_resource_read",
+      [PublishEventRequestEventTypeEnum.mcpResourcesList]: "mcp_resources_list",
+      [PublishEventRequestEventTypeEnum.mcpPromptsGet]: "mcp_prompt_get",
+      [PublishEventRequestEventTypeEnum.mcpPromptsList]: "mcp_prompts_list",
+      "mcp:custom/type": "mcp_custom_type",
     };
 
     for (const [input, expected] of Object.entries(eventTypes)) {
