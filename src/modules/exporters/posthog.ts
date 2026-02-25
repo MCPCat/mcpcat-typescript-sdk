@@ -80,8 +80,10 @@ export class PostHogExporter implements Exporter {
     };
 
     if (event.resourceName) {
-      properties.tool_name = event.resourceName;
       properties.resource_name = event.resourceName;
+      if (event.eventType === "tools/call") {
+        properties.tool_name = event.resourceName;
+      }
     }
     if (event.duration !== undefined) {
       properties.duration_ms = event.duration;
@@ -95,16 +97,10 @@ export class PostHogExporter implements Exporter {
     if (event.isError !== undefined) properties.is_error = event.isError;
 
     if (event.parameters !== undefined) {
-      properties.parameters =
-        typeof event.parameters === "object"
-          ? JSON.stringify(event.parameters)
-          : event.parameters;
+      properties.parameters = event.parameters;
     }
     if (event.response !== undefined) {
-      properties.response =
-        typeof event.response === "object"
-          ? JSON.stringify(event.response)
-          : event.response;
+      properties.response = event.response;
     }
 
     // Set person properties from identity data
@@ -150,9 +146,12 @@ export class PostHogExporter implements Exporter {
       }
     }
 
-    // Add tool context
+    // Add tool/resource context
     if (event.resourceName) {
-      properties.tool_name = event.resourceName;
+      properties.resource_name = event.resourceName;
+      if (event.eventType === "tools/call") {
+        properties.tool_name = event.resourceName;
+      }
     }
     if (event.serverName) properties.server_name = event.serverName;
     if (event.serverVersion) properties.server_version = event.serverVersion;

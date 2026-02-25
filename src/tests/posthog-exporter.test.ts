@@ -165,6 +165,7 @@ describe("PostHogExporter", () => {
     );
     expect(exceptionEvent.properties.$exception_source).toBe("backend");
     expect(exceptionEvent.properties.$session_id).toBe("ses_session456");
+    expect(exceptionEvent.properties.resource_name).toBe("get_weather");
     expect(exceptionEvent.properties.tool_name).toBe("get_weather");
     expect(exceptionEvent.properties.server_name).toBe("weather-server");
   });
@@ -245,7 +246,7 @@ describe("PostHogExporter", () => {
     expect(body.batch[0].properties.$set).toBeUndefined();
   });
 
-  it("should JSON-stringify object parameters and response", async () => {
+  it("should pass through parameters and response as-is (objects stay objects)", async () => {
     const exporter = new PostHogExporter({
       type: "posthog",
       apiKey: "phc_test_key",
@@ -261,12 +262,8 @@ describe("PostHogExporter", () => {
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
     const props = body.batch[0].properties;
 
-    expect(props.parameters).toBe(
-      JSON.stringify({ city: "London", units: "celsius" }),
-    );
-    expect(props.response).toBe(
-      JSON.stringify({ temperature: 15, condition: "cloudy" }),
-    );
+    expect(props.parameters).toEqual({ city: "London", units: "celsius" });
+    expect(props.response).toEqual({ temperature: 15, condition: "cloudy" });
   });
 
   it("should pass through string parameters and response as-is", async () => {
@@ -287,6 +284,30 @@ describe("PostHogExporter", () => {
 
     expect(props.parameters).toBe("raw input");
     expect(props.response).toBe("raw output");
+  });
+
+  it("should only set tool_name for tools/call events", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+    });
+
+    // tools/call should have tool_name
+    await exporter.export(
+      makeEvent({ eventType: "tools/call", resourceName: "get_weather" }),
+    );
+    let body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.batch[0].properties.tool_name).toBe("get_weather");
+    expect(body.batch[0].properties.resource_name).toBe("get_weather");
+
+    // resources/read should NOT have tool_name
+    fetchSpy.mockClear();
+    await exporter.export(
+      makeEvent({ eventType: "resources/read", resourceName: "my_resource" }),
+    );
+    body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.batch[0].properties.tool_name).toBeUndefined();
+    expect(body.batch[0].properties.resource_name).toBe("my_resource");
   });
 
   it("should map event types to PostHog event names", async () => {
