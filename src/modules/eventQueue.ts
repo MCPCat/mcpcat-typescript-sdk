@@ -64,7 +64,12 @@ class EventQueue {
         }
       }
 
-      Object.assign(event, sanitizeEvent(event));
+      try {
+        Object.assign(event, sanitizeEvent(event));
+      } catch (error) {
+        writeToLog(`Failed to sanitize event: ${error}`);
+        continue;
+      }
 
       event.id = event.id || (await KSUID.withPrefix("evt").random());
       this.activeRequests++;
