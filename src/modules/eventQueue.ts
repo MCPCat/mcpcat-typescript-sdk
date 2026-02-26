@@ -10,6 +10,7 @@ import { getServerTrackingData } from "./internal.js";
 import { getSessionInfo } from "./session.js";
 import { redactEvent } from "./redaction.js";
 import { sanitizeEvent } from "./sanitization.js";
+import { truncateEvent } from "./truncation.js";
 import KSUID from "../thirdparty/ksuid/index.js";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { TelemetryManager } from "./telemetry.js";
@@ -68,6 +69,12 @@ class EventQueue {
         Object.assign(event, sanitizeEvent(event));
       } catch (error) {
         writeToLog(`Failed to sanitize event: ${error}`);
+        continue;
+      }
+      try {
+        Object.assign(event, truncateEvent(event));
+      } catch (error) {
+        writeToLog(`Failed to truncate event: ${error}`);
         continue;
       }
 
