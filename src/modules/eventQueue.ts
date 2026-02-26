@@ -10,6 +10,7 @@ import { getServerTrackingData } from "./internal.js";
 import { getSessionInfo } from "./session.js";
 import { redactEvent } from "./redaction.js";
 import { sanitizeEvent } from "./sanitization.js";
+import { truncateEvent } from "./truncation.js";
 import KSUID from "../thirdparty/ksuid/index.js";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { TelemetryManager } from "./telemetry.js";
@@ -65,6 +66,7 @@ class EventQueue {
       }
 
       Object.assign(event, sanitizeEvent(event));
+      Object.assign(event, truncateEvent(event));
 
       event.id = event.id || (await KSUID.withPrefix("evt").random());
       this.activeRequests++;
