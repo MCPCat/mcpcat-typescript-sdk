@@ -9,6 +9,7 @@ import { writeToLog } from "./logging.js";
 import { getServerTrackingData } from "./internal.js";
 import { getSessionInfo } from "./session.js";
 import { redactEvent } from "./redaction.js";
+import { sanitizeEvent } from "./sanitization.js";
 import KSUID from "../thirdparty/ksuid/index.js";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { TelemetryManager } from "./telemetry.js";
@@ -50,27 +51,32 @@ class EventQueue {
 
     while (this.queue.length > 0 && this.activeRequests < this.concurrency) {
       const event = this.queue.shift();
-      if (event?.redactionFn) {
-        // Redact sensitive information if a redaction function is provided
+      if (!event) continue;
+
+      if (event.redactionFn) {
         try {
           const redactedEvent = await redactEvent(event, event.redactionFn);
-          event.redactionFn = undefined; // Clear the function to avoid reprocessing
+          event.redactionFn = undefined;
           Object.assign(event, redactedEvent);
         } catch (error) {
           writeToLog(`Failed to redact event: ${error}`);
-          continue; // Skip this event if redaction fails
+          continue;
         }
       }
 
-      if (event) {
-        event.id = event.id || (await KSUID.withPrefix("evt").random());
-        this.activeRequests++;
-        this.sendEvent(event as Event).finally(() => {
-          this.activeRequests--;
-          // Try to process more events
-          this.process();
-        });
+      try {
+        Object.assign(event, sanitizeEvent(event));
+      } catch (error) {
+        writeToLog(`Failed to sanitize event: ${error}`);
+        continue;
       }
+
+      event.id = event.id || (await KSUID.withPrefix("evt").random());
+      this.activeRequests++;
+      this.sendEvent(event as Event).finally(() => {
+        this.activeRequests--;
+        this.process();
+      });
     }
 
     this.processing = false;
