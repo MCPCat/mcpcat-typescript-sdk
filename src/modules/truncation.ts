@@ -236,7 +236,7 @@ function jsonByteSize(value: unknown): number {
  * Iterates until the result fits or no further reduction is possible.
  */
 function truncateLargestFields(obj: any, maxBytes: number): any {
-  let result = JSON.parse(JSON.stringify(obj)); // deep clone
+  let result = structuredClone(obj);
 
   for (let attempt = 0; attempt < 10; attempt++) {
     const currentSize = jsonByteSize(result);
