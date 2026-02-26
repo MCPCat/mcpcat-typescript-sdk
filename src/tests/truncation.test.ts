@@ -378,6 +378,29 @@ describe("truncateEvent - size targeting", () => {
     const size = new TextEncoder().encode(JSON.stringify(result)).length;
     expect(size).toBeLessThanOrEqual(102_400);
   });
+
+  it("should preserve timestamp as Date when last-resort truncation runs", () => {
+    const ts = new Date("2025-01-15T12:00:00Z");
+    const event = makeEvent({
+      timestamp: ts,
+      // Flat payload with multiple oversized strings: depth reduction won't help,
+      // so this forces truncateLargestFields() to run.
+      parameters: {
+        a: "x".repeat(60_000),
+        b: "y".repeat(60_000),
+        c: "z".repeat(60_000),
+        d: "w".repeat(60_000),
+      },
+    });
+
+    const result = truncateEvent(event);
+
+    expect(result.timestamp instanceof Date).toBe(true);
+    expect((result.timestamp as Date).toISOString()).toBe(ts.toISOString());
+    expect(
+      new TextEncoder().encode(JSON.stringify(result)).length,
+    ).toBeLessThanOrEqual(102_400);
+  });
 });
 
 describe("truncateEvent - non-mutation", () => {
