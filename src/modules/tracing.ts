@@ -15,7 +15,6 @@ import { getServerTrackingData, handleIdentify } from "./internal.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
-import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { captureException } from "./exceptions.js";
 import { addContextParameterToTools } from "./context-parameters.js";
 import {
@@ -95,7 +94,7 @@ export function setupListToolsTracing(
         writeToLog(
           `Warning: Original list tools handler failed, this suggests an error MCPCat did not cause - ${error}`,
         );
-        event.error = { message: getMCPCompatibleErrorMessage(error) };
+        event.error = captureException(error);
         event.isError = true;
         event.duration =
           (event.timestamp &&
