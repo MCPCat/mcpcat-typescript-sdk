@@ -685,16 +685,13 @@ describe("Identify Feature", () => {
       // Wait for events
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Verify identify event was published with error
+      // Verify NO identify event was published (errors in identify function should not publish events)
       const events = eventCapture.getEvents();
       const identifyEvent = events.find(
         (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpcatIdentify,
       );
 
-      expect(identifyEvent).toBeDefined();
-      expect(identifyEvent?.isError).toBe(true);
-      expect(identifyEvent?.error?.message).toContain(errorMessage);
-      expect(identifyEvent?.duration).toBeDefined();
+      expect(identifyEvent).toBeUndefined();
 
       // Verify no user identity was stored
       const data = getServerTrackingData(server.server);
