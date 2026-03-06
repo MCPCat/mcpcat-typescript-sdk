@@ -51,7 +51,7 @@ describe("EventQueue", () => {
     (getServerTrackingData as any).mockReturnValue({
       projectId: "test-project",
       sessionId: "test-session",
-      options: {},
+      options: { enableTracing: true },
     });
 
     // Mock session info
@@ -108,6 +108,26 @@ describe("EventQueue", () => {
       expect(writeToLog).toHaveBeenCalledWith(
         "Warning: Server tracking data not found. Event will not be published.",
       );
+    });
+
+    it("should not publish event when enableTracing is false", () => {
+      (getServerTrackingData as any).mockReturnValue({
+        projectId: "test-project",
+        sessionId: "test-session",
+        options: { enableTracing: false },
+      });
+
+      const mockServer: MCPServerLike = {} as any;
+      const event: Event = {
+        sessionId: "test-session",
+        tool: "test-tool",
+        timestamp: new Date(),
+        arguments: { test: "value" },
+      };
+
+      publishEvent(mockServer, event);
+
+      expect(getSessionInfo).not.toHaveBeenCalled();
     });
 
     it("should calculate duration when not provided", () => {
