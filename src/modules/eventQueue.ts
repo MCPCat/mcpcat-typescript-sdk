@@ -231,6 +231,10 @@ export function publishEvent(
     return;
   }
 
+  if (!data.options.enableTracing) {
+    return;
+  }
+
   const sessionInfo = getSessionInfo(server, data);
 
   // Calculate duration if not provided
