@@ -30,6 +30,11 @@ class EventQueue {
     this.apiClient = new EventsApi(config);
   }
 
+  configure(apiBaseUrl: string): void {
+    const config = new Configuration({ basePath: apiBaseUrl });
+    this.apiClient = new EventsApi(config);
+  }
+
   setTelemetryManager(telemetryManager: TelemetryManager): void {
     this.telemetryManager = telemetryManager;
   }

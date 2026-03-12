@@ -47,6 +47,7 @@ import { eventQueue } from "./modules/eventQueue.js";
  * @param options.customContextDescription - Custom description for the injected context parameter. Only applies when enableToolCallContext is true. Use this to provide domain-specific guidance to LLMs about what context they should provide.
  * @param options.identify - Async function to identify users and attach custom data to their sessions.
  * @param options.redactSensitiveInformation - Function to redact sensitive data before sending to MCPCat.
+ * @param options.apiBaseUrl - Custom API base URL for sending events. Falls back to the `MCPCAT_API_URL` environment variable if not set, then to the default `https://api.mcpcat.io`.
  * @param options.exporters - Configure telemetry exporters to send events to external systems. Available exporters:
  *   - `otlp`: OpenTelemetry Protocol exporter (see {@link ../modules/exporters/otlp.OTLPExporter})
  *   - `datadog`: Datadog APM exporter (see {@link ../modules/exporters/datadog.DatadogExporter})
@@ -142,6 +143,12 @@ function track(
 ): any {
   try {
     const validatedServer = isCompatibleServerType(server);
+
+    // Resolve API base URL: option > env var > default
+    const apiBaseUrl = options.apiBaseUrl || process.env.MCPCAT_API_URL;
+    if (apiBaseUrl) {
+      eventQueue.configure(apiBaseUrl);
+    }
 
     // For high-level servers, we need to pass the underlying server to some functions
     const lowLevelServer = (

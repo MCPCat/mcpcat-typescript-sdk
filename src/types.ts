@@ -11,6 +11,7 @@ export interface MCPCatOptions {
   ) => Promise<UserIdentity | null>;
   redactSensitiveInformation?: RedactFunction;
   exporters?: Record<string, ExporterConfig>;
+  apiBaseUrl?: string;
 }
 
 export type ToolCallback =
