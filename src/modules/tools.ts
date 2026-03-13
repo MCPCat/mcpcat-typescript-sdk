@@ -9,7 +9,7 @@ import { addContextParameterToTools } from "./context-parameters.js";
 import { publishEvent } from "./eventQueue.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
-import { getMCPCompatibleErrorMessage } from "./compatibility.js";
+import { captureException } from "./exceptions.js";
 
 export const GET_MORE_TOOLS_NAME = "get_more_tools" as const;
 
@@ -85,7 +85,7 @@ export function setupMCPCatTools(server: MCPServerLike): void {
         writeToLog(
           `Warning: Original list tools handler failed, this suggests an error MCPCat did not cause - ${error}`,
         );
-        event.error = { message: getMCPCompatibleErrorMessage(error) };
+        event.error = captureException(error);
         event.isError = true;
         event.duration =
           (event.timestamp &&
