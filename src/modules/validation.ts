@@ -1,6 +1,6 @@
 import { writeToLog } from "./logging.js";
 
-const TAG_KEY_REGEX = /^[a-zA-Z0-9_.:\- ]+$/;
+const TAG_KEY_REGEX = /^[a-zA-Z0-9$_.:\- ]+$/;
 const MAX_TAG_KEY_LENGTH = 32;
 const MAX_TAG_VALUE_LENGTH = 200;
 const MAX_TAG_ENTRIES = 50;

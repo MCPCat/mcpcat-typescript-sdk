@@ -99,12 +99,14 @@ describe("validateTags", () => {
     expect(validateTags(tags)).toBeNull();
   });
 
-  it("should allow keys with periods, colons, dashes, and spaces", () => {
+  it("should allow keys with periods, colons, dashes, spaces, and dollar signs", () => {
     const tags = {
       "my.tag": "value",
       "my:tag": "value",
       "my-tag": "value",
       "my tag": "value",
+      $ai_trace_id: "trace-1",
+      my$key: "value",
     };
     expect(validateTags(tags)).toEqual(tags);
   });
