@@ -379,6 +379,13 @@ export class SentryExporter implements Exporter {
     if (event.clientName) tags.client_name = event.clientName;
     if (event.identifyActorGivenId) tags.actor_id = event.identifyActorGivenId;
 
+    // Add customer-defined tags
+    if (event.tags) {
+      for (const [key, value] of Object.entries(event.tags)) {
+        tags[key] = value;
+      }
+    }
+
     return tags;
   }
 
@@ -393,6 +400,11 @@ export class SentryExporter implements Exporter {
     if (event.clientVersion) extra.client_version = event.clientVersion;
     if (event.duration !== undefined) extra.duration_ms = event.duration;
     if (event.error) extra.error = event.error;
+
+    // Add customer-defined properties
+    if (event.properties) {
+      extra.properties = event.properties;
+    }
 
     return extra;
   }

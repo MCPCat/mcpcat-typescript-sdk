@@ -343,6 +343,62 @@ describe("PostHogExporter", () => {
     }
   });
 
+  it("should include customer-defined tags with mcpcat_tag_ prefix", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+    });
+
+    await exporter.export(
+      makeEvent({
+        tags: { env: "production", trace_id: "abc-123" },
+      }),
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const props = body.batch[0].properties;
+    expect(props.mcpcat_tag_env).toBe("production");
+    expect(props.mcpcat_tag_trace_id).toBe("abc-123");
+  });
+
+  it("should include customer-defined properties under mcpcat_properties", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+    });
+
+    await exporter.export(
+      makeEvent({
+        properties: { device: "mobile", feature_flags: ["dark_mode"] },
+      }),
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const props = body.batch[0].properties;
+    expect(props.mcpcat_properties).toEqual({
+      device: "mobile",
+      feature_flags: ["dark_mode"],
+    });
+  });
+
+  it("should not include tag or properties keys when not set on event", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+    });
+
+    await exporter.export(makeEvent());
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const props = body.batch[0].properties;
+    // No mcpcat_tag_* keys
+    const tagKeys = Object.keys(props).filter((k) =>
+      k.startsWith("mcpcat_tag_"),
+    );
+    expect(tagKeys).toHaveLength(0);
+    expect(props.mcpcat_properties).toBeUndefined();
+  });
+
   it("should include userIntent in properties", async () => {
     const exporter = new PostHogExporter({
       type: "posthog",

@@ -114,6 +114,18 @@ export class PostHogExporter implements Exporter {
       properties.$set = $set;
     }
 
+    // Add customer-defined tags with prefix to avoid collisions
+    if (event.tags) {
+      for (const [key, value] of Object.entries(event.tags)) {
+        properties[`mcpcat_tag_${key}`] = value;
+      }
+    }
+
+    // Add customer-defined properties under a namespace
+    if (event.properties) {
+      properties.mcpcat_properties = event.properties;
+    }
+
     return {
       event: eventName,
       distinct_id: distinctId,

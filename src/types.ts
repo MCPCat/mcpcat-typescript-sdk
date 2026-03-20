@@ -12,6 +12,14 @@ export interface MCPCatOptions {
   redactSensitiveInformation?: RedactFunction;
   exporters?: Record<string, ExporterConfig>;
   apiBaseUrl?: string;
+  eventTags?: (
+    request: any,
+    extra?: CompatibleRequestHandlerExtra,
+  ) => Record<string, string> | null | Promise<Record<string, string> | null>;
+  eventProperties?: (
+    request: any,
+    extra?: CompatibleRequestHandlerExtra,
+  ) => Record<string, any> | null | Promise<Record<string, any> | null>;
 }
 
 export type ToolCallback =
@@ -83,6 +91,10 @@ export interface Event {
   // Error tracking
   isError?: boolean;
   error?: ErrorData;
+
+  // Customer-defined metadata
+  tags?: Record<string, string> | null;
+  properties?: Record<string, any> | null;
 
   // Legacy fields for MCPCat API compatibility
   actorId?: string; // Maps to identifyActorGivenId in some contexts
@@ -211,4 +223,6 @@ export interface CustomEventData {
   duration?: number;
   isError?: boolean;
   error?: any;
+  tags?: Record<string, string>;
+  properties?: Record<string, any>;
 }

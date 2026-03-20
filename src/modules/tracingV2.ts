@@ -7,7 +7,12 @@ import {
   CompatibleRequestHandlerExtra,
 } from "../types.js";
 import { writeToLog } from "./logging.js";
-import { getServerTrackingData, handleIdentify } from "./internal.js";
+import {
+  getServerTrackingData,
+  handleIdentify,
+  resolveEventTags,
+  resolveEventProperties,
+} from "./internal.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
@@ -308,6 +313,15 @@ function createToolsCallWrapper(
         // Identify user session
         await handleIdentify(server, data, request, extra);
         event.sessionId = data.sessionId;
+
+        const resolvedTags = await resolveEventTags(data, request, extra);
+        if (resolvedTags) event.tags = resolvedTags;
+        const resolvedProperties = await resolveEventProperties(
+          data,
+          request,
+          extra,
+        );
+        if (resolvedProperties) event.properties = resolvedProperties;
 
         // Extract context for userIntent
         if (

@@ -39,6 +39,8 @@ interface DatadogLog {
     server_version?: string;
     is_error?: boolean;
     error?: any;
+    tags?: Record<string, string> | null;
+    properties?: Record<string, any> | null;
   };
 }
 
@@ -141,6 +143,13 @@ export class DatadogExporter implements Exporter {
     if (event.resourceName) tags.push(`resource:${event.resourceName}`);
     if (event.isError) tags.push("error:true");
 
+    // Add customer-defined tags to ddtags
+    if (event.tags) {
+      for (const [key, value] of Object.entries(event.tags)) {
+        tags.push(`${key}:${value}`);
+      }
+    }
+
     const log: DatadogLog = {
       message: `${event.eventType || "unknown"} - ${event.resourceName || "unknown"}`,
       service: this.config.service,
@@ -167,6 +176,8 @@ export class DatadogExporter implements Exporter {
         server_version: event.serverVersion,
         is_error: event.isError,
         error: event.error,
+        tags: event.tags,
+        properties: event.properties,
       },
     };
 

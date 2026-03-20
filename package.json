@@ -73,7 +73,7 @@
     "@modelcontextprotocol/sdk": ">=1.11"
   },
   "dependencies": {
-    "mcpcat-api": "0.1.7"
+    "mcpcat-api": "0.1.8"
   },
   "lint-staged": {
     "*.{ts,js}": [
