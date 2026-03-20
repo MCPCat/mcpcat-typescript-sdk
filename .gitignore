@@ -69,4 +69,5 @@ coverage
 # .changeset/
 .serena
 AGENTS.md
+docs/superpowers/
 
