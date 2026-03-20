@@ -1,6 +1,7 @@
 import { Event, Exporter } from "../../types.js";
 import { writeToLog } from "../logging.js";
 import { traceContext } from "./trace-context.js";
+import { MCPCAT_SOURCE } from "../constants.js";
 
 export interface OTLPExporterConfig {
   type: "otlp";
@@ -96,6 +97,10 @@ export class OTLPExporter implements Exporter {
       startTimeUnixNano: startTimeNanos.toString(),
       endTimeUnixNano: endTimeNanos.toString(),
       attributes: [
+        {
+          key: "source",
+          value: { stringValue: MCPCAT_SOURCE },
+        },
         {
           key: "mcp.event_type",
           value: { stringValue: event.eventType || "" },

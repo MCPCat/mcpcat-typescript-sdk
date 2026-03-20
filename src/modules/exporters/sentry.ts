@@ -1,6 +1,7 @@
 import { Event, Exporter } from "../../types.js";
 import { writeToLog } from "../logging.js";
 import { traceContext } from "./trace-context.js";
+import { MCPCAT_SOURCE } from "../constants.js";
 
 export interface SentryExporterConfig {
   type: "sentry";
@@ -32,6 +33,7 @@ interface SentryTransaction {
       op: string;
       status?: "ok" | "internal_error";
     };
+    [key: string]: any;
   };
   spans?: Array<{
     span_id: string;
@@ -353,14 +355,12 @@ export class SentryExporter implements Exporter {
       timestamp: endTimestamp,
       start_timestamp: startTimestamp,
       transaction: transactionName,
-      contexts: {
-        trace: {
-          trace_id: traceId,
-          span_id: spanId,
-          op: event.eventType || "mcp.event",
-          status: event.isError ? "internal_error" : "ok",
-        },
-      },
+      contexts: this.buildContexts(event, {
+        trace_id: traceId,
+        span_id: spanId,
+        op: event.eventType || "mcp.event",
+        status: event.isError ? "internal_error" : "ok",
+      }) as SentryTransaction["contexts"],
       tags: this.buildTags(event),
       extra: this.buildExtra(event),
     };
@@ -369,7 +369,9 @@ export class SentryExporter implements Exporter {
   }
 
   private buildTags(event: Event): Record<string, string> {
-    const tags: Record<string, string> = {};
+    const tags: Record<string, string> = {
+      source: MCPCAT_SOURCE,
+    };
 
     if (this.config.environment) tags.environment = this.config.environment;
     if (this.config.release) tags.release = this.config.release;
@@ -401,12 +403,23 @@ export class SentryExporter implements Exporter {
     if (event.duration !== undefined) extra.duration_ms = event.duration;
     if (event.error) extra.error = event.error;
 
-    // Add customer-defined properties
+    return extra;
+  }
+
+  private buildContexts(
+    event: Event,
+    traceCtx: Record<string, any>,
+  ): Record<string, any> {
+    const contexts: Record<string, any> = {
+      trace: traceCtx,
+    };
+
+    // Add customer-defined properties as a custom context
     if (event.properties) {
-      extra.properties = event.properties;
+      contexts.mcpcat = event.properties;
     }
 
-    return extra;
+    return contexts;
   }
 
   private eventToErrorEvent(
@@ -462,12 +475,12 @@ export class SentryExporter implements Exporter {
         ],
       },
       contexts: {
-        trace: {
-          trace_id: traceId, // Same trace ID as transaction/log for correlation
+        ...this.buildContexts(event, {
+          trace_id: traceId,
           span_id: spanId,
-          parent_span_id: transaction?.contexts.trace.span_id, // Link to transaction span if available
+          parent_span_id: transaction?.contexts.trace.span_id,
           op: transaction?.contexts.trace.op || event.eventType || "mcp.event",
-        },
+        }),
         mcp: {
           resource_name: event.resourceName,
           session_id: event.sessionId,
