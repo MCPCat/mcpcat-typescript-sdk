@@ -381,10 +381,10 @@ export class SentryExporter implements Exporter {
     if (event.clientName) tags.client_name = event.clientName;
     if (event.identifyActorGivenId) tags.actor_id = event.identifyActorGivenId;
 
-    // Add customer-defined tags
+    // Add customer-defined tags (namespaced to avoid collisions with Sentry reserved fields)
     if (event.tags) {
       for (const [key, value] of Object.entries(event.tags)) {
-        tags[key] = value;
+        tags[`mcpcat.${key}`] = value;
       }
     }
 
