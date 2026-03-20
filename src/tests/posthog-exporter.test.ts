@@ -445,9 +445,10 @@ describe("PostHogExporter", () => {
     expect(span.timestamp).toBe("2025-01-15T10:00:00.000Z");
 
     // Core $ai_* properties — full property schema verification
+    expect(span.properties.$ai_session_id).toBe("mcpcat_ses_session456");
     expect(span.properties.$ai_trace_id).toBeDefined();
     expect(span.properties.$ai_span_id).toBeDefined();
-    expect(span.properties.$ai_trace_id).not.toBe(span.properties.$ai_span_id);
+    expect(span.properties.$ai_trace_id).not.toBe(span.properties.$ai_span_id); // trace from session, span from event
     expect(span.properties.$ai_span_name).toBe("get_weather");
     expect(span.properties.$ai_latency).toBeCloseTo(0.25); // 250ms → 0.25s
     expect(span.properties.$ai_is_error).toBe(false);
@@ -483,16 +484,20 @@ describe("PostHogExporter", () => {
     const bodyC = JSON.parse(fetchSpy.mock.calls[0][1].body);
     const spanC = bodyC.batch.find((e: any) => e.event === "$ai_span");
 
-    // Same sessionId → same $ai_trace_id (trace_id derived from sessionId)
+    // Same sessionId → same $ai_session_id and $ai_trace_id
+    expect(spanA.properties.$ai_session_id).toBe("mcpcat_ses_xxx");
+    expect(spanA.properties.$ai_session_id).toBe(
+      spanB.properties.$ai_session_id,
+    );
     expect(spanA.properties.$ai_trace_id).toBe(spanB.properties.$ai_trace_id);
 
-    // Different eventId → different $ai_span_id (span_id derived from eventId)
+    // Different eventId → different $ai_span_id
     expect(spanA.properties.$ai_span_id).not.toBe(spanB.properties.$ai_span_id);
 
     // Same eventId → same $ai_span_id (deterministic)
     expect(spanA.properties.$ai_span_id).toBe(spanC.properties.$ai_span_id);
 
-    // Verify trace_id != span_id (guards against swapped inputs)
+    // trace_id (from session) != span_id (from event)
     expect(spanA.properties.$ai_trace_id).not.toBe(
       spanA.properties.$ai_span_id,
     );
