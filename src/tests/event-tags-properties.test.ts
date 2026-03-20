@@ -428,6 +428,52 @@ describe("Event Tags & Properties", () => {
     });
   });
 
+  describe("redaction bypass", () => {
+    it("should not redact tags or properties when redactSensitiveInformation is configured", async () => {
+      track(server, "test-project", {
+        redactSensitiveInformation: async () => "[REDACTED]",
+        eventTags: async () => ({
+          env: "production",
+          trace_id: "abc-123",
+        }),
+        eventProperties: async () => ({
+          device: "desktop",
+          app_version: "2.1.0",
+          feature_flags: ["dark_mode", "beta_ui"],
+        }),
+      });
+
+      await client.request(
+        {
+          method: "tools/call",
+          params: {
+            name: "add_todo",
+            arguments: { text: "Test todo" },
+          },
+        },
+        CallToolResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const events = eventCapture.getEvents();
+      const toolCallEvent = events.find(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpToolsCall,
+      );
+      expect(toolCallEvent).toBeDefined();
+      // Tags should NOT be redacted — customer explicitly provides this data
+      expect(toolCallEvent!.tags).toEqual({
+        env: "production",
+        trace_id: "abc-123",
+      });
+      // Properties should NOT be redacted
+      expect(toolCallEvent!.properties).toEqual({
+        device: "desktop",
+        app_version: "2.1.0",
+        feature_flags: ["dark_mode", "beta_ui"],
+      });
+    });
+  });
+
   describe("callback receives correct arguments", () => {
     it("should pass request and extra to eventTags callback", async () => {
       let capturedRequest: any;
