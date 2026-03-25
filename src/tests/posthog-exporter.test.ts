@@ -3,6 +3,7 @@ import { PostHogExporter } from "../modules/exporters/posthog.js";
 import { Event } from "../types.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { validate as uuidValidate, version as uuidVersion } from "uuid";
+import KSUID from "../thirdparty/ksuid/index.js";
 
 function expectUUIDv7(value: string) {
   expect(uuidValidate(value)).toBe(true);
@@ -469,25 +470,30 @@ describe("PostHogExporter", () => {
       enableAITracing: true,
     });
 
-    // Export event A (evt_aaa, ses_xxx)
-    await exporter.export(makeEvent({ id: "evt_aaa", sessionId: "ses_xxx" }));
+    // Use real KSUIDs so toUUIDv7 can parse the embedded timestamp deterministically
+    const sesId = KSUID.withPrefix("ses").randomSync();
+    const evtA = KSUID.withPrefix("evt").randomSync();
+    const evtB = KSUID.withPrefix("evt").randomSync();
+
+    // Export event A
+    await exporter.export(makeEvent({ id: evtA, sessionId: sesId }));
     const bodyA = JSON.parse(fetchSpy.mock.calls[0][1].body);
     const spanA = bodyA.batch.find((e: any) => e.event === "$ai_span");
 
-    // Export event B (evt_bbb, ses_xxx) — same session, different event
+    // Export event B — same session, different event
     fetchSpy.mockClear();
-    await exporter.export(makeEvent({ id: "evt_bbb", sessionId: "ses_xxx" }));
+    await exporter.export(makeEvent({ id: evtB, sessionId: sesId }));
     const bodyB = JSON.parse(fetchSpy.mock.calls[0][1].body);
     const spanB = bodyB.batch.find((e: any) => e.event === "$ai_span");
 
     // Export event A again — verify determinism
     fetchSpy.mockClear();
-    await exporter.export(makeEvent({ id: "evt_aaa", sessionId: "ses_xxx" }));
+    await exporter.export(makeEvent({ id: evtA, sessionId: sesId }));
     const bodyC = JSON.parse(fetchSpy.mock.calls[0][1].body);
     const spanC = bodyC.batch.find((e: any) => e.event === "$ai_span");
 
     // Same sessionId → same $ai_session_id and $ai_trace_id
-    expect(spanA.properties.$ai_session_id).toBe("mcpcat_ses_xxx");
+    expect(spanA.properties.$ai_session_id).toBe(`mcpcat_${sesId}`);
     expect(spanA.properties.$ai_session_id).toBe(
       spanB.properties.$ai_session_id,
     );
@@ -504,9 +510,9 @@ describe("PostHogExporter", () => {
       spanA.properties.$ai_span_id,
     );
 
-    // Valid UUIDs (v5-format from toUUID)
-    expect(uuidValidate(spanA.properties.$ai_trace_id)).toBe(true);
-    expect(uuidValidate(spanA.properties.$ai_span_id)).toBe(true);
+    // Valid UUIDv7s
+    expectUUIDv7(spanA.properties.$ai_trace_id);
+    expectUUIDv7(spanA.properties.$ai_span_id);
   });
 
   it("should NOT emit $ai_span when enableAITracing is false or unset", async () => {
