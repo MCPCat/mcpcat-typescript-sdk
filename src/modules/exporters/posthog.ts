@@ -3,6 +3,7 @@ import { Event, Exporter } from "../../types.js";
 import { writeToLog } from "../logging.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { MCPCAT_SOURCE } from "../constants.js";
+import KSUID from "../../thirdparty/ksuid/index.js";
 
 function toUUID(id: string): string {
   const hash = createHash("sha256").update(id).digest("hex");
@@ -13,6 +14,57 @@ function toUUID(id: string): string {
     ((parseInt(hash[16], 16) & 0x3) | 0x8).toString(16) +
       hash.substring(17, 20),
     hash.substring(20, 32),
+  ].join("-");
+}
+
+/**
+ * Generates a deterministic UUIDv7 from a prefixed KSUID (e.g. ses_xxx).
+ * Uses the KSUID's embedded timestamp for the UUIDv7 timestamp portion
+ * and a SHA-256 hash of the full ID for the random bits.
+ */
+export function toUUIDv7(prefixedId: string): string {
+  // Strip prefix (ses_, evt_, etc.) and parse KSUID
+  const ksuidStr = prefixedId.replace(/^[a-z]+_/, "");
+  let timestampMs: number;
+  try {
+    const ksuid = KSUID.parse(ksuidStr);
+    timestampMs = ksuid.date.getTime();
+  } catch {
+    // Fallback: if KSUID parsing fails, use current time
+    timestampMs = Date.now();
+  }
+
+  // Hash the full ID for deterministic random bits
+  const hash = createHash("sha256").update(prefixedId).digest();
+
+  const buf = Buffer.alloc(16);
+
+  // Bytes 0-5: 48-bit Unix timestamp in milliseconds
+  buf.writeUIntBE(timestampMs, 0, 6);
+
+  // Byte 6: version 7 (0111) + high 4 bits of rand_a from hash
+  buf[6] = 0x70 | (hash[0] & 0x0f);
+  // Byte 7: low 8 bits of rand_a from hash
+  buf[7] = hash[1];
+
+  // Byte 8: variant 10 + high 6 bits of rand_b from hash
+  buf[8] = 0x80 | (hash[2] & 0x3f);
+  // Bytes 9-15: remaining rand_b from hash
+  buf[9] = hash[3];
+  buf[10] = hash[4];
+  buf[11] = hash[5];
+  buf[12] = hash[6];
+  buf[13] = hash[7];
+  buf[14] = hash[8];
+  buf[15] = hash[9];
+
+  const hex = buf.toString("hex");
+  return [
+    hex.substring(0, 8),
+    hex.substring(8, 12),
+    hex.substring(12, 16),
+    hex.substring(16, 20),
+    hex.substring(20, 32),
   ].join("-");
 }
 
@@ -117,7 +169,7 @@ export class PostHogExporter implements Exporter {
     const timestamp = getTimestamp(event);
 
     const properties: Record<string, any> = {
-      $session_id: event.sessionId,
+      $session_id: toUUIDv7(event.sessionId),
       source: MCPCAT_SOURCE,
     };
 
@@ -184,7 +236,7 @@ export class PostHogExporter implements Exporter {
 
     const properties: Record<string, any> = {
       $exception_source: "backend",
-      $session_id: event.sessionId,
+      $session_id: toUUIDv7(event.sessionId),
     };
 
     if (event.error) {
@@ -230,7 +282,7 @@ export class PostHogExporter implements Exporter {
       $ai_span_id: toUUID(event.id),
       $ai_span_name: event.resourceName || "unknown_tool",
       $ai_is_error: event.isError || false,
-      $session_id: event.sessionId,
+      $session_id: toUUIDv7(event.sessionId),
       source: MCPCAT_SOURCE,
     };
 

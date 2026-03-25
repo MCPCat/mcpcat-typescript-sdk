@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { PostHogExporter } from "../modules/exporters/posthog.js";
 import { Event } from "../types.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
+import { validate as uuidValidate, version as uuidVersion } from "uuid";
+
+function expectUUIDv7(value: string) {
+  expect(uuidValidate(value)).toBe(true);
+  expect(uuidVersion(value)).toBe(7);
+}
 
 describe("PostHogExporter", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
@@ -64,7 +70,7 @@ describe("PostHogExporter", () => {
     expect(event.timestamp).toBe("2025-01-15T10:00:00.000Z");
 
     // Verify properties
-    expect(event.properties.$session_id).toBe("ses_session456");
+    expectUUIDv7(event.properties.$session_id);
     expect(event.properties.tool_name).toBe("get_weather");
     expect(event.properties.resource_name).toBe("get_weather");
     expect(event.properties.duration_ms).toBe(150);
@@ -165,7 +171,7 @@ describe("PostHogExporter", () => {
       "TimeoutError: Connection timeout\n    at fetch (/app/index.js:10:5)",
     );
     expect(exceptionEvent.properties.$exception_source).toBe("backend");
-    expect(exceptionEvent.properties.$session_id).toBe("ses_session456");
+    expectUUIDv7(exceptionEvent.properties.$session_id);
     expect(exceptionEvent.properties.resource_name).toBe("get_weather");
     expect(exceptionEvent.properties.tool_name).toBe("get_weather");
     expect(exceptionEvent.properties.server_name).toBe("weather-server");
@@ -450,7 +456,7 @@ describe("PostHogExporter", () => {
     expect(span.properties.$ai_is_error).toBe(false);
     expect(span.properties.$ai_input_state).toEqual({ city: "London" });
     expect(span.properties.$ai_output_state).toEqual({ temp: 15 });
-    expect(span.properties.$session_id).toBe("ses_session456");
+    expectUUIDv7(span.properties.$session_id);
     expect(span.properties.source).toBe("mcpcat");
     expect(span.properties.server_name).toBe("weather-server");
     expect(span.properties.client_name).toBe("claude-desktop");
@@ -498,11 +504,9 @@ describe("PostHogExporter", () => {
       spanA.properties.$ai_span_id,
     );
 
-    // Valid UUID format (8-4-4-4-12 with version=5 and variant=8-b)
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-    expect(spanA.properties.$ai_trace_id).toMatch(uuidRegex);
-    expect(spanA.properties.$ai_span_id).toMatch(uuidRegex);
+    // Valid UUIDs (v5-format from toUUID)
+    expect(uuidValidate(spanA.properties.$ai_trace_id)).toBe(true);
+    expect(uuidValidate(spanA.properties.$ai_span_id)).toBe(true);
   });
 
   it("should NOT emit $ai_span when enableAITracing is false or unset", async () => {
