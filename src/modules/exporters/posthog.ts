@@ -5,18 +5,6 @@ import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { MCPCAT_SOURCE } from "../constants.js";
 import KSUID from "../../thirdparty/ksuid/index.js";
 
-function toUUID(id: string): string {
-  const hash = createHash("sha256").update(id).digest("hex");
-  return [
-    hash.substring(0, 8),
-    hash.substring(8, 12),
-    "5" + hash.substring(13, 16),
-    ((parseInt(hash[16], 16) & 0x3) | 0x8).toString(16) +
-      hash.substring(17, 20),
-    hash.substring(20, 32),
-  ].join("-");
-}
-
 /**
  * Generates a deterministic UUIDv7 from a prefixed KSUID (e.g. ses_xxx).
  * Uses the KSUID's embedded timestamp for the UUIDv7 timestamp portion
@@ -278,8 +266,8 @@ export class PostHogExporter implements Exporter {
 
     const properties: Record<string, any> = {
       $ai_session_id: `mcpcat_${event.sessionId}`,
-      $ai_trace_id: toUUID(event.sessionId),
-      $ai_span_id: toUUID(event.id),
+      $ai_trace_id: toUUIDv7(event.sessionId),
+      $ai_span_id: toUUIDv7(event.id),
       $ai_span_name: event.resourceName || "unknown_tool",
       $ai_is_error: event.isError || false,
       $session_id: toUUIDv7(event.sessionId),
