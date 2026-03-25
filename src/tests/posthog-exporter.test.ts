@@ -343,7 +343,7 @@ describe("PostHogExporter", () => {
     }
   });
 
-  it("should include customer-defined tags with mcpcat_tag_ prefix", async () => {
+  it("should spread customer-defined tags directly into properties", async () => {
     const exporter = new PostHogExporter({
       type: "posthog",
       apiKey: "phc_test_key",
@@ -357,11 +357,11 @@ describe("PostHogExporter", () => {
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
     const props = body.batch[0].properties;
-    expect(props.mcpcat_tag_env).toBe("production");
-    expect(props.mcpcat_tag_trace_id).toBe("abc-123");
+    expect(props.env).toBe("production");
+    expect(props.trace_id).toBe("abc-123");
   });
 
-  it("should include customer-defined properties under mcpcat_properties", async () => {
+  it("should spread customer-defined properties directly into properties", async () => {
     const exporter = new PostHogExporter({
       type: "posthog",
       apiKey: "phc_test_key",
@@ -375,13 +375,11 @@ describe("PostHogExporter", () => {
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
     const props = body.batch[0].properties;
-    expect(props.mcpcat_properties).toEqual({
-      device: "mobile",
-      feature_flags: ["dark_mode"],
-    });
+    expect(props.device).toBe("mobile");
+    expect(props.feature_flags).toEqual(["dark_mode"]);
   });
 
-  it("should not include tag or properties keys when not set on event", async () => {
+  it("should not include customer tag or property keys when not set on event", async () => {
     const exporter = new PostHogExporter({
       type: "posthog",
       apiKey: "phc_test_key",
@@ -391,12 +389,10 @@ describe("PostHogExporter", () => {
 
     const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
     const props = body.batch[0].properties;
-    // No mcpcat_tag_* keys
-    const tagKeys = Object.keys(props).filter((k) =>
-      k.startsWith("mcpcat_tag_"),
-    );
-    expect(tagKeys).toHaveLength(0);
-    expect(props.mcpcat_properties).toBeUndefined();
+    // Only MCPCat-set properties should exist, no customer tags/properties
+    expect(props.source).toBe("mcpcat");
+    expect(props.env).toBeUndefined();
+    expect(props.device).toBeUndefined();
   });
 
   it("should include userIntent in properties", async () => {
@@ -588,17 +584,15 @@ describe("PostHogExporter", () => {
     expect(span.properties.env).toBe("production");
     expect(span.properties.region).toBe("us-east");
 
-    // Properties spread directly (NOT as mcpcat_properties)
+    // Properties spread directly
     expect(span.properties.feature_flag).toBe("new_ui");
     expect(span.properties.count).toBe(42);
 
-    // Verify regular event still uses namespaced format
+    // Regular event also spreads directly (same behavior)
     const regular = body.batch.find((e: any) => e.event === "mcp_tool_call");
-    expect(regular.properties.mcpcat_tag_env).toBe("production");
-    expect(regular.properties.mcpcat_properties).toEqual({
-      feature_flag: "new_ui",
-      count: 42,
-    });
+    expect(regular.properties.env).toBe("production");
+    expect(regular.properties.feature_flag).toBe("new_ui");
+    expect(regular.properties.count).toBe(42);
   });
 
   it("should allow customer tags to override $ai_* defaults on $ai_span", async () => {
