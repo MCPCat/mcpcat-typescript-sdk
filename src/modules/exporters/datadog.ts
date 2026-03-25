@@ -1,6 +1,7 @@
 import { Event, Exporter } from "../../types.js";
 import { writeToLog } from "../logging.js";
 import { traceContext } from "./trace-context.js";
+import { MCPCAT_SOURCE } from "../constants.js";
 
 export interface DatadogExporterConfig {
   type: "datadog";
@@ -39,6 +40,8 @@ interface DatadogLog {
     server_version?: string;
     is_error?: boolean;
     error?: any;
+    tags?: Record<string, string> | null;
+    properties?: Record<string, any> | null;
   };
 }
 
@@ -141,10 +144,21 @@ export class DatadogExporter implements Exporter {
     if (event.resourceName) tags.push(`resource:${event.resourceName}`);
     if (event.isError) tags.push("error:true");
 
+    tags.push(`source:${MCPCAT_SOURCE}`);
+
+    // Add customer-defined tags to ddtags (namespaced to avoid collisions with reserved Datadog tags)
+    if (event.tags) {
+      for (const [key, value] of Object.entries(event.tags)) {
+        const sanitizedKey = key.toLowerCase().replace(/[\s:,]+/g, "_");
+        const sanitizedValue = value.replace(/,/g, "_");
+        tags.push(`mcpcat.${sanitizedKey}:${sanitizedValue}`);
+      }
+    }
+
     const log: DatadogLog = {
       message: `${event.eventType || "unknown"} - ${event.resourceName || "unknown"}`,
       service: this.config.service,
-      ddsource: "mcpcat",
+      ddsource: MCPCAT_SOURCE,
       ddtags: tags.join(","),
       timestamp: event.timestamp ? event.timestamp.getTime() : Date.now(),
       status: event.isError ? "error" : "info",
@@ -167,6 +181,8 @@ export class DatadogExporter implements Exporter {
         server_version: event.serverVersion,
         is_error: event.isError,
         error: event.error,
+        tags: event.tags,
+        properties: event.properties,
       },
     };
 

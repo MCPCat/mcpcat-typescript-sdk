@@ -129,6 +129,10 @@ class EventQueue {
       // Legacy fields
       actorId: event.actorId || event.identifyActorGivenId,
       eventId: event.eventId,
+
+      // Customer-defined metadata
+      tags: event.tags ?? undefined,
+      properties: event.properties ?? undefined,
     };
   }
 
@@ -285,6 +289,10 @@ export function publishEvent(
 
     // Preserve redaction function
     redactionFn: eventInput.redactionFn,
+
+    // Customer-defined metadata
+    tags: eventInput.tags,
+    properties: eventInput.properties,
   };
 
   eventQueue.add(fullEvent);

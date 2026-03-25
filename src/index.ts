@@ -33,6 +33,7 @@ import {
   publishEvent as publishEventToQueue,
 } from "./modules/eventQueue.js";
 import { MCPCAT_CUSTOM_EVENT_TYPE } from "./modules/constants.js";
+import { validateTags } from "./modules/validation.js";
 import { eventQueue } from "./modules/eventQueue.js";
 
 /**
@@ -47,6 +48,8 @@ import { eventQueue } from "./modules/eventQueue.js";
  * @param options.customContextDescription - Custom description for the injected context parameter. Only applies when enableToolCallContext is true. Use this to provide domain-specific guidance to LLMs about what context they should provide.
  * @param options.identify - Async function to identify users and attach custom data to their sessions.
  * @param options.redactSensitiveInformation - Function to redact sensitive data before sending to MCPCat.
+ * @param options.eventTags - Callback invoked on every auto-captured event (tool calls, tool lists, initialize) to attach string key-value tags. Tags are intended to be indexed and queryable in the MCPCat dashboard — use them for structured metadata you'll want to filter or group by (e.g., trace IDs, environments, regions). Tags are validated client-side: keys must be ≤32 chars matching `[a-zA-Z0-9$_.:\- ]`, values must be strings ≤200 chars with no newlines, max 50 entries per event. Invalid entries are silently dropped with a warning logged to `~/mcpcat.log`. If the callback throws or returns null, tags are omitted. Receives the same `(request, extra)` arguments as `identify`.
+ * @param options.eventProperties - Callback invoked on every auto-captured event to attach flexible JSON metadata (device info, feature flags, nested context). No constraints beyond standard JSON types. If the callback throws or returns null, properties are omitted. Receives the same `(request, extra)` arguments as `identify`.
  * @param options.apiBaseUrl - Custom API base URL for sending events. Falls back to the `MCPCAT_API_URL` environment variable if not set, then to the default `https://api.mcpcat.io`.
  * @param options.exporters - Configure telemetry exporters to send events to external systems. Available exporters:
  *   - `otlp`: OpenTelemetry Protocol exporter (see {@link ../modules/exporters/otlp.OTLPExporter})
@@ -106,6 +109,23 @@ import { eventQueue } from "./modules/eventQueue.js";
  *   redactSensitiveInformation: async (text) => {
  *     return text.replace(/api_key_\w+/g, "[REDACTED]");
  *   }
+ * });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // With event tags and properties
+ * mcpcat.track(mcpServer, "proj_abc123xyz", {
+ *   eventTags: async (request, extra) => ({
+ *     trace_id: extra?.requestContext?.traceId,
+ *     env: process.env.NODE_ENV,
+ *     region: "us-east-1",
+ *   }),
+ *   eventProperties: async (request, extra) => ({
+ *     device: "desktop",
+ *     app_version: "2.1.0",
+ *     feature_flags: ["dark_mode", "beta_ui"],
+ *   }),
  * });
  * ```
  *
@@ -196,6 +216,8 @@ function track(
         customContextDescription: options.customContextDescription,
         identify: options.identify,
         redactSensitiveInformation: options.redactSensitiveInformation,
+        eventTags: options.eventTags,
+        eventProperties: options.eventProperties,
       },
       sessionSource: "mcpcat", // Initially MCPCat-generated, will change to "mcp" if MCP sessionId is provided in requests
     };
@@ -340,6 +362,14 @@ export async function publishCustomEvent(
     isError: eventData?.isError,
     error: eventData?.error,
   };
+
+  // Wire up customer-defined metadata
+  if (eventData?.tags) {
+    event.tags = validateTags(eventData.tags);
+  }
+  if (eventData?.properties && Object.keys(eventData.properties).length > 0) {
+    event.properties = eventData.properties;
+  }
 
   // If we have a tracked server, use the publishEvent function
   // Otherwise, add directly to the event queue

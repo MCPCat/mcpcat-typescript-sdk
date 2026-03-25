@@ -343,6 +343,58 @@ describe("PostHogExporter", () => {
     }
   });
 
+  it("should spread customer-defined tags directly into properties", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+    });
+
+    await exporter.export(
+      makeEvent({
+        tags: { env: "production", trace_id: "abc-123" },
+      }),
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const props = body.batch[0].properties;
+    expect(props.env).toBe("production");
+    expect(props.trace_id).toBe("abc-123");
+  });
+
+  it("should spread customer-defined properties directly into properties", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+    });
+
+    await exporter.export(
+      makeEvent({
+        properties: { device: "mobile", feature_flags: ["dark_mode"] },
+      }),
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const props = body.batch[0].properties;
+    expect(props.device).toBe("mobile");
+    expect(props.feature_flags).toEqual(["dark_mode"]);
+  });
+
+  it("should not include customer tag or property keys when not set on event", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+    });
+
+    await exporter.export(makeEvent());
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const props = body.batch[0].properties;
+    // Only MCPCat-set properties should exist, no customer tags/properties
+    expect(props.source).toBe("mcpcat");
+    expect(props.env).toBeUndefined();
+    expect(props.device).toBeUndefined();
+  });
+
   it("should include userIntent in properties", async () => {
     const exporter = new PostHogExporter({
       type: "posthog",
@@ -357,5 +409,247 @@ describe("PostHogExporter", () => {
     expect(body.batch[0].properties.user_intent).toBe(
       "Check the weather in London",
     );
+  });
+
+  it("should emit $ai_span alongside regular event for tool calls when enableAITracing is true", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+      enableAITracing: true,
+    });
+
+    await exporter.export(
+      makeEvent({
+        eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
+        resourceName: "get_weather",
+        duration: 250,
+        parameters: { city: "London" },
+        response: { temp: 15 },
+      }),
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.batch).toHaveLength(2); // regular + $ai_span
+
+    const regular = body.batch[0];
+    expect(regular.event).toBe("mcp_tool_call");
+
+    const span = body.batch[1];
+    expect(span.event).toBe("$ai_span");
+    expect(span.type).toBe("capture");
+    expect(span.distinct_id).toBe("ses_session456");
+    expect(span.timestamp).toBe("2025-01-15T10:00:00.000Z");
+
+    // Core $ai_* properties — full property schema verification
+    expect(span.properties.$ai_session_id).toBe("mcpcat_ses_session456");
+    expect(span.properties.$ai_trace_id).toBeDefined();
+    expect(span.properties.$ai_span_id).toBeDefined();
+    expect(span.properties.$ai_trace_id).not.toBe(span.properties.$ai_span_id); // trace from session, span from event
+    expect(span.properties.$ai_span_name).toBe("get_weather");
+    expect(span.properties.$ai_latency).toBeCloseTo(0.25); // 250ms → 0.25s
+    expect(span.properties.$ai_is_error).toBe(false);
+    expect(span.properties.$ai_input_state).toEqual({ city: "London" });
+    expect(span.properties.$ai_output_state).toEqual({ temp: 15 });
+    expect(span.properties.$session_id).toBe("ses_session456");
+    expect(span.properties.source).toBe("mcpcat");
+    expect(span.properties.server_name).toBe("weather-server");
+    expect(span.properties.client_name).toBe("claude-desktop");
+  });
+
+  it("should generate deterministic UUIDs for $ai_span trace and span IDs", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+      enableAITracing: true,
+    });
+
+    // Export event A (evt_aaa, ses_xxx)
+    await exporter.export(makeEvent({ id: "evt_aaa", sessionId: "ses_xxx" }));
+    const bodyA = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const spanA = bodyA.batch.find((e: any) => e.event === "$ai_span");
+
+    // Export event B (evt_bbb, ses_xxx) — same session, different event
+    fetchSpy.mockClear();
+    await exporter.export(makeEvent({ id: "evt_bbb", sessionId: "ses_xxx" }));
+    const bodyB = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const spanB = bodyB.batch.find((e: any) => e.event === "$ai_span");
+
+    // Export event A again — verify determinism
+    fetchSpy.mockClear();
+    await exporter.export(makeEvent({ id: "evt_aaa", sessionId: "ses_xxx" }));
+    const bodyC = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const spanC = bodyC.batch.find((e: any) => e.event === "$ai_span");
+
+    // Same sessionId → same $ai_session_id and $ai_trace_id
+    expect(spanA.properties.$ai_session_id).toBe("mcpcat_ses_xxx");
+    expect(spanA.properties.$ai_session_id).toBe(
+      spanB.properties.$ai_session_id,
+    );
+    expect(spanA.properties.$ai_trace_id).toBe(spanB.properties.$ai_trace_id);
+
+    // Different eventId → different $ai_span_id
+    expect(spanA.properties.$ai_span_id).not.toBe(spanB.properties.$ai_span_id);
+
+    // Same eventId → same $ai_span_id (deterministic)
+    expect(spanA.properties.$ai_span_id).toBe(spanC.properties.$ai_span_id);
+
+    // trace_id (from session) != span_id (from event)
+    expect(spanA.properties.$ai_trace_id).not.toBe(
+      spanA.properties.$ai_span_id,
+    );
+
+    // Valid UUID format (8-4-4-4-12 with version=5 and variant=8-b)
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    expect(spanA.properties.$ai_trace_id).toMatch(uuidRegex);
+    expect(spanA.properties.$ai_span_id).toMatch(uuidRegex);
+  });
+
+  it("should NOT emit $ai_span when enableAITracing is false or unset", async () => {
+    // Unset (default)
+    const exporter1 = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+    });
+    await exporter1.export(
+      makeEvent({
+        eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
+      }),
+    );
+    let body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.batch).toHaveLength(1);
+    expect(body.batch[0].event).toBe("mcp_tool_call");
+
+    // Explicitly false
+    fetchSpy.mockClear();
+    const exporter2 = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+      enableAITracing: false,
+    });
+    await exporter2.export(
+      makeEvent({
+        eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
+      }),
+    );
+    body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.batch).toHaveLength(1);
+    expect(body.batch[0].event).toBe("mcp_tool_call");
+  });
+
+  it("should NOT emit $ai_span for non-tool-call events even with enableAITracing", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+      enableAITracing: true,
+    });
+
+    const nonToolCallTypes = [
+      PublishEventRequestEventTypeEnum.mcpInitialize,
+      PublishEventRequestEventTypeEnum.mcpToolsList,
+      PublishEventRequestEventTypeEnum.mcpResourcesRead,
+      PublishEventRequestEventTypeEnum.mcpResourcesList,
+      PublishEventRequestEventTypeEnum.mcpPromptsGet,
+      PublishEventRequestEventTypeEnum.mcpPromptsList,
+    ];
+
+    for (const eventType of nonToolCallTypes) {
+      fetchSpy.mockClear();
+      await exporter.export(makeEvent({ eventType }));
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      const aiSpan = body.batch.find((e: any) => e.event === "$ai_span");
+      expect(aiSpan).toBeUndefined();
+    }
+  });
+
+  it("should spread customer tags and properties directly on $ai_span (not namespaced)", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+      enableAITracing: true,
+    });
+
+    await exporter.export(
+      makeEvent({
+        eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
+        tags: { env: "production", region: "us-east" },
+        properties: { feature_flag: "new_ui", count: 42 },
+      }),
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const span = body.batch.find((e: any) => e.event === "$ai_span");
+
+    // Tags spread directly (NOT as mcpcat_tag_*)
+    expect(span.properties.env).toBe("production");
+    expect(span.properties.region).toBe("us-east");
+
+    // Properties spread directly
+    expect(span.properties.feature_flag).toBe("new_ui");
+    expect(span.properties.count).toBe(42);
+
+    // Regular event also spreads directly (same behavior)
+    const regular = body.batch.find((e: any) => e.event === "mcp_tool_call");
+    expect(regular.properties.env).toBe("production");
+    expect(regular.properties.feature_flag).toBe("new_ui");
+    expect(regular.properties.count).toBe(42);
+  });
+
+  it("should allow customer tags to override $ai_* defaults on $ai_span", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+      enableAITracing: true,
+    });
+
+    const customTraceId = "custom-trace-uuid-from-customer";
+    await exporter.export(
+      makeEvent({
+        eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
+        tags: { $ai_trace_id: customTraceId, $ai_span_name: "custom_name" },
+      }),
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const span = body.batch.find((e: any) => e.event === "$ai_span");
+
+    // Customer tag overrides MCPCat's generated $ai_trace_id
+    expect(span.properties.$ai_trace_id).toBe(customTraceId);
+    expect(span.properties.$ai_span_name).toBe("custom_name");
+  });
+
+  it("should emit regular + $exception + $ai_span for error tool calls with enableAITracing", async () => {
+    const exporter = new PostHogExporter({
+      type: "posthog",
+      apiKey: "phc_test_key",
+      enableAITracing: true,
+    });
+
+    await exporter.export(
+      makeEvent({
+        eventType: PublishEventRequestEventTypeEnum.mcpToolsCall,
+        isError: true,
+        error: {
+          message: "Tool execution failed",
+          type: "ExecutionError",
+        },
+      }),
+    );
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.batch).toHaveLength(3);
+
+    // Event order: regular, $exception, $ai_span
+    expect(body.batch[0].event).toBe("mcp_tool_call");
+    expect(body.batch[1].event).toBe("$exception");
+    expect(body.batch[2].event).toBe("$ai_span");
+
+    // Verify $ai_span error properties
+    const span = body.batch[2];
+    expect(span.properties.$ai_is_error).toBe(true);
+    expect(span.properties.$ai_error).toEqual({
+      message: "Tool execution failed",
+      type: "ExecutionError",
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { Event, Exporter } from "../../types.js";
 import { writeToLog } from "../logging.js";
 import { traceContext } from "./trace-context.js";
+import { MCPCAT_SOURCE } from "../constants.js";
 
 export interface OTLPExporterConfig {
   type: "otlp";
@@ -97,6 +98,10 @@ export class OTLPExporter implements Exporter {
       endTimeUnixNano: endTimeNanos.toString(),
       attributes: [
         {
+          key: "source",
+          value: { stringValue: MCPCAT_SOURCE },
+        },
+        {
           key: "mcp.event_type",
           value: { stringValue: event.eventType || "" },
         },
@@ -132,6 +137,20 @@ export class OTLPExporter implements Exporter {
           key: "mcp.client_version",
           value: { stringValue: event.clientVersion || "" },
         },
+        // Add customer-defined tags as individual attributes
+        ...Object.entries(event.tags || {}).map(([key, value]) => ({
+          key: `mcpcat.tag.${key}`,
+          value: { stringValue: value },
+        })),
+        // Add customer-defined properties as JSON
+        ...(event.properties
+          ? [
+              {
+                key: "mcpcat.properties",
+                value: { stringValue: JSON.stringify(event.properties) },
+              },
+            ]
+          : []),
       ].filter((attr) => attr.value.stringValue), // Remove empty attributes
       status: {
         code: event.isError ? 2 : 1, // ERROR : OK

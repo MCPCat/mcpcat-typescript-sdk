@@ -16,6 +16,8 @@ const PROTECTED_FIELDS = new Set([
   "resourceName",
   "eventType",
   "actorId",
+  "tags",
+  "properties",
 ]);
 
 /**

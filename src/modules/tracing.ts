@@ -11,7 +11,12 @@ import {
 } from "../types.js";
 import { writeToLog } from "./logging.js";
 import { handleReportMissing } from "./tools.js";
-import { getServerTrackingData, handleIdentify } from "./internal.js";
+import {
+  getServerTrackingData,
+  handleIdentify,
+  resolveEventTags,
+  resolveEventProperties,
+} from "./internal.js";
 import { getServerSessionId } from "./session.js";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { publishEvent } from "./eventQueue.js";
@@ -68,6 +73,16 @@ export function setupListToolsTracing(
         timestamp: new Date(),
         redactionFn: data?.options.redactSensitiveInformation,
       };
+      if (data) {
+        const resolvedTags = await resolveEventTags(data, request, extra);
+        if (resolvedTags) event.tags = resolvedTags;
+        const resolvedProperties = await resolveEventProperties(
+          data,
+          request,
+          extra,
+        );
+        if (resolvedProperties) event.properties = resolvedProperties;
+      }
       try {
         const originalResponse = (await originalListToolsHandler(
           request,
@@ -177,6 +192,16 @@ export function setupInitializeTracing(
           timestamp: new Date(),
           redactionFn: data.options.redactSensitiveInformation,
         };
+
+        const resolvedTags = await resolveEventTags(data, request, extra);
+        if (resolvedTags) event.tags = resolvedTags;
+        const resolvedProperties = await resolveEventProperties(
+          data,
+          request,
+          extra,
+        );
+        if (resolvedProperties) event.properties = resolvedProperties;
+
         const result = await originalInitializeHandler(request, extra);
         event.response = result;
         publishEvent(server, event);
@@ -221,6 +246,16 @@ export function setupToolCallTracing(server: MCPServerLike): void {
             timestamp: new Date(),
             redactionFn: data.options.redactSensitiveInformation,
           };
+
+          const resolvedTags = await resolveEventTags(data, request, extra);
+          if (resolvedTags) event.tags = resolvedTags;
+          const resolvedProperties = await resolveEventProperties(
+            data,
+            request,
+            extra,
+          );
+          if (resolvedProperties) event.properties = resolvedProperties;
+
           const result = await originalInitializeHandler(request, extra);
           event.response = result;
           publishEvent(server, event);
@@ -254,6 +289,15 @@ export function setupToolCallTracing(server: MCPServerLike): void {
       try {
         // Try to identify the session if we haven't already and identify function is provided
         await handleIdentify(server, data, request, extra);
+
+        const resolvedTags = await resolveEventTags(data, request, extra);
+        if (resolvedTags) event.tags = resolvedTags;
+        const resolvedProperties = await resolveEventProperties(
+          data,
+          request,
+          extra,
+        );
+        if (resolvedProperties) event.properties = resolvedProperties;
 
         // Check for missing context if enableToolCallContext is true and it's not report_missing
         if (
