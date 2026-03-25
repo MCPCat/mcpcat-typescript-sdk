@@ -1,6 +1,6 @@
 {
   "name": "mcpcat",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Analytics tool for MCP (Model Context Protocol) servers - tracks tool usage patterns and provides insights",
   "type": "module",
   "main": "dist/index.js",
@@ -56,6 +56,7 @@
     "@changesets/cli": "^2.29.8",
     "@modelcontextprotocol/sdk": "~1.24.2",
     "@types/node": "^22.15.21",
+    "@types/uuid": "^11.0.0",
     "@typescript-eslint/eslint-plugin": "^8.32.1",
     "@typescript-eslint/parser": "^8.32.1",
     "@vitest/coverage-v8": "^4.0.14",
@@ -66,6 +67,7 @@
     "prettier": "^3.5.3",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
+    "uuid": "^13.0.0",
     "vitest": "^4.0.14",
     "zod": "^3.25 || ^4.0"
   },

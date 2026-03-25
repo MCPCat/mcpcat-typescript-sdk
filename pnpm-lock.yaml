@@ -27,6 +27,9 @@ importers:
       "@types/node":
         specifier: ^22.15.21
         version: 22.15.21
+      "@types/uuid":
+        specifier: ^11.0.0
+        version: 11.0.0
       "@typescript-eslint/eslint-plugin":
         specifier: ^8.32.1
         version: 8.32.1(@typescript-eslint/parser@8.32.1(eslint@9.39.1)(typescript@5.8.3))(eslint@9.39.1)(typescript@5.8.3)
@@ -57,6 +60,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
+      uuid:
+        specifier: ^13.0.0
+        version: 13.0.0
       vitest:
         specifier: ^4.0.14
         version: 4.0.14(@opentelemetry/api@1.9.0)(@types/node@22.15.21)(@vitest/ui@4.0.14)(yaml@2.8.0)
@@ -1064,6 +1070,13 @@ packages:
       {
         integrity: sha512-EV/37Td6c+MgKAbkcLG6vqZ2zEYHD7bvSrzqqs2RIhbA6w3x+Dqz8MZM3sP6kGTeLrdoOgKZe+Xja7tUB2DNkQ==,
       }
+
+  "@types/uuid@11.0.0":
+    resolution:
+      {
+        integrity: sha512-HVyk8nj2m+jcFRNazzqyVKiZezyhDKrGUA3jlEcg/nZ6Ms+qHwocba1Y/AaVaznJTAM9xpdFSh+ptbNrhOGvZA==,
+      }
+    deprecated: This is a stub types definition. uuid provides its own type definitions, so you do not need this installed.
 
   "@typescript-eslint/eslint-plugin@8.32.1":
     resolution:
@@ -3432,6 +3445,13 @@ packages:
         integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==,
       }
 
+  uuid@13.0.0:
+    resolution:
+      {
+        integrity: sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==,
+      }
+    hasBin: true
+
   vary@1.1.2:
     resolution:
       {
@@ -4152,6 +4172,10 @@ snapshots:
   "@types/node@22.15.21":
     dependencies:
       undici-types: 6.21.0
+
+  "@types/uuid@11.0.0":
+    dependencies:
+      uuid: 13.0.0
 
   "@typescript-eslint/eslint-plugin@8.32.1(@typescript-eslint/parser@8.32.1(eslint@9.39.1)(typescript@5.8.3))(eslint@9.39.1)(typescript@5.8.3)":
     dependencies:
@@ -5572,6 +5596,8 @@ snapshots:
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
+
+  uuid@13.0.0: {}
 
   vary@1.1.2: {}
 
