@@ -24,25 +24,33 @@ export const setupTestHooks = () => {
 export class EventCapture {
   private capturedEvents: Event[] = [];
   private originalEventQueueAdd?: (event: Event) => void;
+  private originalSendEvent?: (event: Event, retries?: number) => Promise<void>;
 
   async start() {
-    // Mock the eventQueue.add method to capture events
     const eventQueueModule = await import("../modules/eventQueue.js");
-    this.originalEventQueueAdd = eventQueueModule.eventQueue.add;
+    const eq = eventQueueModule.eventQueue as any;
+    this.originalEventQueueAdd = eq.add.bind(eq);
+    this.originalSendEvent = eq.sendEvent.bind(eq);
 
-    // Replace the add method with our capturing version
-    eventQueueModule.eventQueue.add = (event: Event) => {
+    // Capture at add() (synchronous) to keep this instance's events tied to
+    // this instance, then defer to the real add() so process() runs the
+    // redact/sanitize/truncate pipeline — those mutate the captured event in
+    // place via Object.assign. sendEvent is stubbed so no real HTTP goes out.
+    eq.add = (event: Event) => {
       this.capturedEvents.push(event);
-      // Still call the original if it exists (for integration tests)
-      this.originalEventQueueAdd?.call(eventQueueModule.eventQueue, event);
+      this.originalEventQueueAdd!(event);
     };
+    eq.sendEvent = async (_event: Event) => {};
   }
 
   async stop() {
-    // Restore the original method
-    if (this.originalEventQueueAdd) {
+    if (this.originalEventQueueAdd && this.originalSendEvent) {
       const eventQueueModule = await import("../modules/eventQueue.js");
-      eventQueueModule.eventQueue.add = this.originalEventQueueAdd;
+      const eq = eventQueueModule.eventQueue as any;
+      eq.add = this.originalEventQueueAdd;
+      eq.sendEvent = this.originalSendEvent;
+      this.originalEventQueueAdd = undefined;
+      this.originalSendEvent = undefined;
     }
   }
 
