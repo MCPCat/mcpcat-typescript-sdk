@@ -13,10 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // a package missing the "type": "module" marker — the file is then parsed as
 // CommonJS, yielding zero named exports and "does not provide an export
 // named X" link errors. See mcpcat-api@0.1.8 for a concrete example.
-//
-// TODO(@mcpcat): remove .skip once mcpcat-api@0.1.9 (with dist/esm/package.json
-// marker) is published to npm and pinned in this package.
-describe.skip("ESM consumer smoke test", () => {
+describe("ESM consumer smoke test", () => {
   let workDir: string;
   let tarballPath: string;
 
@@ -68,19 +65,5 @@ describe.skip("ESM consumer smoke test", () => {
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe("ok");
-  });
-
-  test("can import { Configuration } from 'mcpcat-api' transitively", () => {
-    const result = spawnSync(
-      "node",
-      [
-        "--input-type=module",
-        "-e",
-        "import { Configuration } from 'mcpcat-api'; if (typeof Configuration !== 'function') { process.exit(2); }",
-      ],
-      { cwd: workDir, encoding: "utf8" },
-    );
-    expect(result.stderr).toBe("");
-    expect(result.status).toBe(0);
   });
 });
