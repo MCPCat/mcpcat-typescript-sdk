@@ -15,8 +15,8 @@ importers:
   .:
     dependencies:
       mcpcat-api:
-        specifier: 0.1.8
-        version: 0.1.8
+        specifier: 0.1.9
+        version: 0.1.9
     devDependencies:
       "@changesets/cli":
         specifier: ^2.29.8
@@ -2486,10 +2486,10 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
-  mcpcat-api@0.1.8:
+  mcpcat-api@0.1.9:
     resolution:
       {
-        integrity: sha512-HhKa4HidN5swb6k+YOKNfv3MyVfTxxvhR7VPnQBxy/lBw3arVOfWzX9FTt0uYc4NrMjWJeTUtpbS8ENR0F44iQ==,
+        integrity: sha512-+Kwx43e+dE3gW4dKMtdX+soT7co7LrEPQNGgQcGlWtTgfpop0rXaXMoeRvJWovAfOLpFcVPin/8Fr5rSnpREJQ==,
       }
 
   media-typer@1.1.0:
@@ -5052,7 +5052,7 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcpcat-api@0.1.8: {}
+  mcpcat-api@0.1.9: {}
 
   media-typer@1.1.0: {}
 

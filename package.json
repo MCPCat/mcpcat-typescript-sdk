@@ -1,6 +1,6 @@
 {
   "name": "mcpcat",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Analytics tool for MCP (Model Context Protocol) servers - tracks tool usage patterns and provides insights",
   "type": "module",
   "main": "dist/index.js",
@@ -18,8 +18,10 @@
     "dev": "tsup --watch",
     "test": "vitest",
     "test:compatibility": "vitest run src/tests/mcp-version-compatibility.test.ts",
+    "test:esm-consume": "vitest run src/tests/esm-consumer.test.ts",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
+    "prepack": "pnpm run build",
     "prepare": "husky",
     "prepublishOnly": "pnpm run build && pnpm run test && pnpm run lint && pnpm run typecheck"
   },
@@ -75,7 +77,7 @@
     "@modelcontextprotocol/sdk": ">=1.11"
   },
   "dependencies": {
-    "mcpcat-api": "0.1.8"
+    "mcpcat-api": "0.1.9"
   },
   "lint-staged": {
     "*.{ts,js}": [
