@@ -18,6 +18,7 @@
     "dev": "tsup --watch",
     "test": "vitest",
     "test:compatibility": "vitest run src/tests/mcp-version-compatibility.test.ts",
+    "test:esm-consume": "vitest run src/tests/esm-consumer.test.ts",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
