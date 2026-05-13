@@ -21,6 +21,7 @@
     "test:esm-consume": "vitest run src/tests/esm-consumer.test.ts",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
+    "prepack": "pnpm run build",
     "prepare": "husky",
     "prepublishOnly": "pnpm run build && pnpm run test && pnpm run lint && pnpm run typecheck"
   },
