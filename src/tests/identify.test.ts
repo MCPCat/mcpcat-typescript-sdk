@@ -4,7 +4,10 @@ import {
   resetTodos,
 } from "./test-utils/client-server-factory";
 import { track } from "../index";
-import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types";
+import {
+  CallToolResultSchema,
+  ListToolsResultSchema,
+} from "@modelcontextprotocol/sdk/types";
 import { EventCapture } from "./test-utils";
 import { PublishEventRequestEventTypeEnum } from "mcpcat-api";
 import { getServerTrackingData } from "../modules/internal";
@@ -744,6 +747,60 @@ describe("Identify Feature", () => {
       // It will store whatever was returned, even if invalid
       expect(storedIdentity).toBeDefined();
       expect((storedIdentity as any).invalidField).toBe("invalid");
+
+      await eventCapture.stop();
+    });
+  });
+
+  describe("Identify Fields on tools/list Events", () => {
+    it("should populate identify fields on mcp:tools/list event when tools/list is the first request after track()", async () => {
+      const eventCapture = new EventCapture();
+      await eventCapture.start();
+
+      let identifyCalled = false;
+      const testUserId = `list-tools-user-${randomUUID()}`;
+      const testUserName = `List Tools User ${randomUUID()}`;
+      const testUserData = {
+        plan: "premium",
+        org: `org-${randomUUID()}`,
+      };
+
+      track(server, "test-project", {
+        enableTracing: true,
+        identify: async () => {
+          identifyCalled = true;
+          return {
+            userId: testUserId,
+            userName: testUserName,
+            userData: testUserData,
+          };
+        },
+      });
+
+      // tools/list is the FIRST request after track() — no prior tools/call
+      // has had a chance to prime the identifiedSessions cache. The tools/list
+      // event should still publish with identify fields populated.
+      await client.request(
+        {
+          method: "tools/list",
+          params: {},
+        },
+        ListToolsResultSchema,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(identifyCalled).toBe(true);
+
+      const events = eventCapture.getEvents();
+      const listToolsEvent = events.find(
+        (e) => e.eventType === PublishEventRequestEventTypeEnum.mcpToolsList,
+      );
+
+      expect(listToolsEvent).toBeDefined();
+      expect(listToolsEvent?.identifyActorGivenId).toBe(testUserId);
+      expect(listToolsEvent?.identifyActorName).toBe(testUserName);
+      expect(listToolsEvent?.identifyActorData).toEqual(testUserData);
 
       await eventCapture.stop();
     });

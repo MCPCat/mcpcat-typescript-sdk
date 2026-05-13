@@ -74,6 +74,8 @@ export function setupListToolsTracing(
         redactionFn: data?.options.redactSensitiveInformation,
       };
       if (data) {
+        await handleIdentify(server, data, request, extra);
+        event.sessionId = data.sessionId;
         const resolvedTags = await resolveEventTags(data, request, extra);
         if (resolvedTags) event.tags = resolvedTags;
         const resolvedProperties = await resolveEventProperties(

@@ -4,7 +4,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { MCPServerLike, UnredactedEvent } from "../types.js";
 import { writeToLog } from "./logging.js";
-import { getServerTrackingData } from "./internal.js";
+import { getServerTrackingData, handleIdentify } from "./internal.js";
 import { addContextParameterToTools } from "./context-parameters.js";
 import { publishEvent } from "./eventQueue.js";
 import { getServerSessionId } from "./session.js";
@@ -74,6 +74,10 @@ export function setupMCPCatTools(server: MCPServerLike): void {
         timestamp: new Date(),
         redactionFn: data?.options.redactSensitiveInformation,
       };
+      if (data) {
+        await handleIdentify(server, data, request, extra);
+        event.sessionId = data.sessionId;
+      }
       try {
         const originalResponse = (await originalListToolsHandler(
           request,
