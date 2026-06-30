@@ -4,6 +4,7 @@ import { setDiagnosticsSink } from "./logging.js";
 import {
   DIAGNOSTICS_SCOPE_NAME,
   DEFAULT_DIAGNOSTICS_ENDPOINT,
+  DEFAULT_DIAGNOSTICS_TOKEN,
 } from "./constants.js";
 import packageJson from "../../package.json" with { type: "json" };
 
@@ -31,6 +32,17 @@ function resolveEndpoint(): string {
   }
   const trimmed = base.replace(/\/+$/, "");
   return trimmed.endsWith("/v1/logs") ? trimmed : `${trimmed}/v1/logs`;
+}
+
+function resolveToken(): string {
+  try {
+    return (
+      globalThis.process?.env?.MCPCAT_DIAGNOSTICS_TOKEN ||
+      DEFAULT_DIAGNOSTICS_TOKEN
+    );
+  } catch {
+    return DEFAULT_DIAGNOSTICS_TOKEN;
+  }
 }
 
 function scheduleFlush(): void {
@@ -214,9 +226,15 @@ export async function flushDiagnostics(): Promise<void> {
       ],
     };
 
+    const token = resolveToken();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
     await fetch(resolveEndpoint(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     });
   } catch {

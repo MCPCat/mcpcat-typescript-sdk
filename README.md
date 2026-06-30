@@ -139,6 +139,8 @@ can detect when an SDK fails to set up. Each record is tagged with your project 
 (or an anonymous install ID when none is available) plus SDK/OS/runtime metadata.
 Local `~/mcpcat.log` logging is unchanged.
 
+Diagnostics requests carry a non-secret shared key; self-hosted collectors can override the endpoint and key via `MCPCAT_DIAGNOSTICS_ENDPOINT` / `MCPCAT_DIAGNOSTICS_TOKEN`.
+
 Disable it with either:
 
 - `track(server, projectId, { disableDiagnostics: true })`, or

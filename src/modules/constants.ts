@@ -6,3 +6,10 @@ export const MCPCAT_SOURCE = "mcpcat";
 
 export const DIAGNOSTICS_SCOPE_NAME = "mcpcat-diagnostics";
 export const DEFAULT_DIAGNOSTICS_ENDPOINT = "https://otel.agentcat.com";
+
+// Public shared ingestion key for SDK diagnostics. NOT a secret — it ships in the
+// published package. It exists to deter drive-by traffic to the collector, paired with
+// a server-side rate limit. Override with MCPCAT_DIAGNOSTICS_TOKEN to point at a
+// self-hosted collector. Must match the collector's bearertokenauth token.
+export const DEFAULT_DIAGNOSTICS_TOKEN =
+  "dgk_sdk_diag_3f9a2c7e1b8d4065af2e9c1d7b6a4f80";
