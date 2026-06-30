@@ -169,7 +169,12 @@ export function _buildRecordForTest(entry: string): OtlpLogRecord {
 
 function envDisabled(): boolean {
   try {
-    return !!globalThis.process?.env?.DISABLE_DIAGNOSTICS;
+    const raw = globalThis.process?.env?.DISABLE_DIAGNOSTICS;
+    if (!raw) return false;
+    // Interpret the value rather than treating mere presence as truthy, so
+    // DISABLE_DIAGNOSTICS=false / 0 / no / off does NOT disable diagnostics.
+    const normalized = raw.trim().toLowerCase();
+    return !["false", "0", "no", "off", ""].includes(normalized);
   } catch {
     return false;
   }

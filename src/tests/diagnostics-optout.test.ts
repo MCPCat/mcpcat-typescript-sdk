@@ -28,4 +28,23 @@ describe("diagnostics opt-out", () => {
     initDiagnostics({ projectId: "proj_1" });
     expect(isDiagnosticsEnabled()).toBe(false);
   });
+
+  it.each(["true", "TRUE", "1", "yes", "on"])(
+    "is disabled when DISABLE_DIAGNOSTICS=%s",
+    (value) => {
+      process.env.DISABLE_DIAGNOSTICS = value;
+      initDiagnostics({ projectId: "proj_1" });
+      expect(isDiagnosticsEnabled()).toBe(false);
+    },
+  );
+
+  // Per Kashish's review: a falsy-looking value must NOT disable diagnostics.
+  it.each(["false", "FALSE", "0", "no", "off", "  "])(
+    "stays enabled when DISABLE_DIAGNOSTICS=%s",
+    (value) => {
+      process.env.DISABLE_DIAGNOSTICS = value;
+      initDiagnostics({ projectId: "proj_1" });
+      expect(isDiagnosticsEnabled()).toBe(true);
+    },
+  );
 });
