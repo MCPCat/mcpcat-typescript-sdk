@@ -1,6 +1,10 @@
 // src/modules/diagnostics.ts
 import { createRequire } from "module";
 import { setDiagnosticsSink } from "./logging.js";
+import {
+  DIAGNOSTICS_SCOPE_NAME,
+  DEFAULT_DIAGNOSTICS_ENDPOINT,
+} from "./constants.js";
 import packageJson from "../../package.json" with { type: "json" };
 
 let enabled = false;
@@ -12,6 +16,36 @@ interface OtlpAttribute {
 }
 
 let staticAttributes: OtlpAttribute[] = [];
+
+const MAX_BUFFER = 1000;
+const BATCH_FLUSH_MS = 2000;
+let buffer: OtlpLogRecord[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function resolveEndpoint(): string {
+  let base = DEFAULT_DIAGNOSTICS_ENDPOINT;
+  try {
+    base = globalThis.process?.env?.MCPCAT_DIAGNOSTICS_ENDPOINT || base;
+  } catch {
+    // ignore
+  }
+  const trimmed = base.replace(/\/+$/, "");
+  return trimmed.endsWith("/v1/logs") ? trimmed : `${trimmed}/v1/logs`;
+}
+
+function scheduleFlush(): void {
+  if (flushTimer) return;
+  try {
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      void flushDiagnostics();
+    }, BATCH_FLUSH_MS);
+    // Do not keep the event loop alive solely for diagnostics.
+    (flushTimer as any)?.unref?.();
+  } catch {
+    flushTimer = null;
+  }
+}
 
 function attr(key: string, value: string | undefined | null): OtlpAttribute[] {
   return value ? [{ key, value: { stringValue: String(value) } }] : [];
@@ -143,8 +177,48 @@ export function initDiagnostics(opts: {
   }
 }
 
-function capture(_entry: string): void {
-  // Filled in by later tasks.
+function capture(entry: string): void {
+  try {
+    if (!enabled) return;
+    if (buffer.length >= MAX_BUFFER) buffer.shift();
+    buffer.push(buildRecord(entry));
+    scheduleFlush();
+  } catch {
+    // diagnostics capture must never throw
+  }
+}
+
+export async function flushDiagnostics(): Promise<void> {
+  try {
+    if (!enabled || buffer.length === 0) return;
+    const records = buffer;
+    buffer = [];
+
+    const payload = {
+      resourceLogs: [
+        {
+          resource: { attributes: staticAttributes },
+          scopeLogs: [
+            {
+              scope: {
+                name: DIAGNOSTICS_SCOPE_NAME,
+                version: packageJson.version,
+              },
+              logRecords: records,
+            },
+          ],
+        },
+      ],
+    };
+
+    await fetch(resolveEndpoint(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // fire-and-forget: never propagate diagnostics network errors
+  }
 }
 
 export function isDiagnosticsEnabled(): boolean {
@@ -155,5 +229,10 @@ export function _resetDiagnosticsForTest(): void {
   enabled = false;
   initialized = false;
   staticAttributes = [];
+  buffer = [];
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
   setDiagnosticsSink(null);
 }
