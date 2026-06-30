@@ -14,6 +14,7 @@ import { truncateEvent } from "./truncation.js";
 import KSUID from "../thirdparty/ksuid/index.js";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { TelemetryManager } from "./telemetry.js";
+import { flushDiagnostics } from "./diagnostics.js";
 
 class EventQueue {
   private queue: UnredactedEvent[] = [];
@@ -216,9 +217,13 @@ export const eventQueue = new EventQueue();
 // Edge environments (Cloudflare Workers, etc.) don't have process signals
 try {
   if (typeof process !== "undefined" && typeof process.once === "function") {
-    process.once("SIGINT", () => eventQueue.destroy());
-    process.once("SIGTERM", () => eventQueue.destroy());
-    process.once("beforeExit", () => eventQueue.destroy());
+    const shutdown = () => {
+      void eventQueue.destroy();
+      void flushDiagnostics();
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
+    process.once("beforeExit", shutdown);
   }
 } catch {
   // process.once not available in this environment - graceful shutdown handlers not registered

@@ -35,6 +35,7 @@ import {
 import { MCPCAT_CUSTOM_EVENT_TYPE } from "./modules/constants.js";
 import { validateTags } from "./modules/validation.js";
 import { eventQueue } from "./modules/eventQueue.js";
+import { initDiagnostics } from "./modules/diagnostics.js";
 
 /**
  * Integrates MCPCat analytics into an MCP server to track tool usage patterns and user interactions.
@@ -162,6 +163,11 @@ function track(
   options: MCPCatOptions = {},
 ): any {
   try {
+    initDiagnostics({
+      projectId,
+      disabled: options.disableDiagnostics,
+    });
+
     const validatedServer = isCompatibleServerType(server);
 
     // Resolve API base URL: option > env var > default

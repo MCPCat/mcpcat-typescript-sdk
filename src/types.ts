@@ -12,6 +12,7 @@ export interface MCPCatOptions {
   redactSensitiveInformation?: RedactFunction;
   exporters?: Record<string, ExporterConfig>;
   apiBaseUrl?: string;
+  disableDiagnostics?: boolean;
   eventTags?: (
     request: any,
     extra?: CompatibleRequestHandlerExtra,
