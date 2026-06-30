@@ -90,6 +90,35 @@ export function _getStaticAttributesForTest(): OtlpAttribute[] {
   return staticAttributes;
 }
 
+interface OtlpLogRecord {
+  timeUnixNano: string;
+  severityNumber: number;
+  severityText: string;
+  body: { stringValue: string };
+  attributes: OtlpAttribute[];
+}
+
+function inferSeverity(entry: string): { number: number; text: string } {
+  if (entry.includes("Warning:")) return { number: 13, text: "WARN" };
+  if (/fail|error/i.test(entry)) return { number: 17, text: "ERROR" };
+  return { number: 9, text: "INFO" };
+}
+
+function buildRecord(entry: string): OtlpLogRecord {
+  const sev = inferSeverity(entry);
+  return {
+    timeUnixNano: (BigInt(Date.now()) * BigInt(1_000_000)).toString(),
+    severityNumber: sev.number,
+    severityText: sev.text,
+    body: { stringValue: entry },
+    attributes: [],
+  };
+}
+
+export function _buildRecordForTest(entry: string): OtlpLogRecord {
+  return buildRecord(entry);
+}
+
 function envDisabled(): boolean {
   try {
     return !!globalThis.process?.env?.MCPCAT_DISABLE_DIAGNOSTICS;
