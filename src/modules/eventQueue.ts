@@ -14,6 +14,7 @@ import { truncateEvent } from "./truncation.js";
 import KSUID from "../thirdparty/ksuid/index.js";
 import { getMCPCompatibleErrorMessage } from "./compatibility.js";
 import { TelemetryManager } from "./telemetry.js";
+import { flushDiagnostics } from "./diagnostics.js";
 
 class EventQueue {
   private queue: UnredactedEvent[] = [];
@@ -154,9 +155,8 @@ class EventQueue {
           publishEventRequest: publishRequest,
         });
         writeToLog(
-          `Successfully sent event ${event.id} | ${event.eventType} | ${event.projectId} | ${event.duration} ms | ${event.identifyActorGivenId || "anonymous"}`,
+          `Successfully sent event ${event.id} | ${event.eventType} | session ${event.sessionId} | ${event.projectId} | ${event.duration} ms | ${event.identifyActorGivenId || "anonymous"}`,
         );
-        writeToLog(`Event details: ${JSON.stringify(event)}`);
       } catch (error) {
         writeToLog(
           `Failed to send event ${event.id}, retrying... [Error: ${getMCPCompatibleErrorMessage(error)}]`,
@@ -216,9 +216,13 @@ export const eventQueue = new EventQueue();
 // Edge environments (Cloudflare Workers, etc.) don't have process signals
 try {
   if (typeof process !== "undefined" && typeof process.once === "function") {
-    process.once("SIGINT", () => eventQueue.destroy());
-    process.once("SIGTERM", () => eventQueue.destroy());
-    process.once("beforeExit", () => eventQueue.destroy());
+    const shutdown = () => {
+      void eventQueue.destroy();
+      void flushDiagnostics();
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
+    process.once("beforeExit", shutdown);
   }
 } catch {
   // process.once not available in this environment - graceful shutdown handlers not registered

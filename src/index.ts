@@ -35,6 +35,7 @@ import {
 import { MCPCAT_CUSTOM_EVENT_TYPE } from "./modules/constants.js";
 import { validateTags } from "./modules/validation.js";
 import { eventQueue } from "./modules/eventQueue.js";
+import { initDiagnostics } from "./modules/diagnostics.js";
 
 /**
  * Integrates MCPCat analytics into an MCP server to track tool usage patterns and user interactions.
@@ -51,6 +52,7 @@ import { eventQueue } from "./modules/eventQueue.js";
  * @param options.eventTags - Callback invoked on every auto-captured event (tool calls, tool lists, initialize) to attach string key-value tags. Tags are intended to be indexed and queryable in the MCPCat dashboard — use them for structured metadata you'll want to filter or group by (e.g., trace IDs, environments, regions). Tags are validated client-side: keys must be ≤32 chars matching `[a-zA-Z0-9$_.:\- ]`, values must be strings ≤200 chars with no newlines, max 50 entries per event. Invalid entries are silently dropped with a warning logged to `~/mcpcat.log`. If the callback throws or returns null, tags are omitted. Receives the same `(request, extra)` arguments as `identify`.
  * @param options.eventProperties - Callback invoked on every auto-captured event to attach flexible JSON metadata (device info, feature flags, nested context). No constraints beyond standard JSON types. If the callback throws or returns null, properties are omitted. Receives the same `(request, extra)` arguments as `identify`.
  * @param options.apiBaseUrl - Custom API base URL for sending events. Falls back to the `MCPCAT_API_URL` environment variable if not set, then to the default `https://api.mcpcat.io`.
+ * @param options.disableDiagnostics - Disables MCPCat's internal SDK diagnostics (anonymous error/telemetry reporting used to monitor SDK setup failures). Diagnostics are on by default and can also be disabled with the `DISABLE_DIAGNOSTICS` environment variable. Local `~/mcpcat.log` logging is unaffected.
  * @param options.exporters - Configure telemetry exporters to send events to external systems. Available exporters:
  *   - `otlp`: OpenTelemetry Protocol exporter (see {@link ../modules/exporters/otlp.OTLPExporter})
  *   - `datadog`: Datadog APM exporter (see {@link ../modules/exporters/datadog.DatadogExporter})
@@ -162,6 +164,11 @@ function track(
   options: MCPCatOptions = {},
 ): any {
   try {
+    initDiagnostics({
+      projectId,
+      disabled: options.disableDiagnostics,
+    });
+
     const validatedServer = isCompatibleServerType(server);
 
     // Resolve API base URL: option > env var > default
@@ -171,11 +178,16 @@ function track(
     }
 
     // For high-level servers, we need to pass the underlying server to some functions
+    const isHighLevel = isHighLevelServer(validatedServer);
     const lowLevelServer = (
-      isHighLevelServer(validatedServer)
-        ? (validatedServer as any).server
-        : validatedServer
+      isHighLevel ? (validatedServer as any).server : validatedServer
     ) as MCPServerLike;
+
+    // Setup-started beacon. Guarantees every install emits at least one
+    // diagnostic tied to its project id, and anchors any later setup failure.
+    writeToLog(
+      `MCPCat setup started | project ${projectId || "(telemetry-only)"} | server ${isHighLevel ? "high-level" : "low-level"}`,
+    );
 
     // Check if server is already being tracked
     const existingData = getServerTrackingData(lowLevelServer);
@@ -223,7 +235,7 @@ function track(
     };
 
     setServerTrackingData(lowLevelServer, mcpcatData);
-    if (isHighLevelServer(validatedServer)) {
+    if (isHighLevel) {
       const highLevelServer = validatedServer as HighLevelMCPServerLike;
       setupTracking(highLevelServer);
     } else {
@@ -244,6 +256,16 @@ function track(
         }
       }
     }
+
+    // Setup-completed beacon. Pairs with the start beacon: start + complete
+    // means setup succeeded; start without complete (plus an error) localizes
+    // the failure.
+    const exporterCount = options.exporters
+      ? Object.keys(options.exporters).length
+      : 0;
+    writeToLog(
+      `MCPCat setup complete | project ${projectId || "(telemetry-only)"} | tracing=${mcpcatData.options.enableTracing} context=${mcpcatData.options.enableToolCallContext} reportMissing=${mcpcatData.options.enableReportMissing} exporters=${exporterCount}`,
+    );
 
     return validatedServer;
   } catch (error) {

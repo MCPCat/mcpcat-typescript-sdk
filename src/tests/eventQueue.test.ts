@@ -238,6 +238,49 @@ describe("EventQueue", () => {
       expect(getSessionInfo).toHaveBeenCalled();
     });
 
+    it("logs only event metadata on successful send, never the payload", async () => {
+      // A prior test calls destroy(), which permanently replaces add() with a
+      // shutdown stub on the singleton. Restore the prototype method so this
+      // event actually flows through the queue.
+      delete (eventQueue as any).add;
+
+      // Point the queue at the mocked API client so the send resolves and the
+      // success path (the metadata log) runs deterministically.
+      (eventQueue as any).apiClient = mockApiClient;
+
+      const SECRET = "TOP_SECRET_PAYLOAD_abc123";
+      const mockServer: MCPServerLike = {} as any;
+      const event: any = {
+        sessionId: "test-session",
+        eventType: "mcp:tools/call",
+        resourceName: "do_thing",
+        parameters: { request: { params: { arguments: { apiKey: SECRET } } } },
+        response: { content: [{ type: "text", text: SECRET }] },
+        userIntent: SECRET,
+        timestamp: new Date(),
+      };
+
+      publishEvent(mockServer, event);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const logged = (writeToLog as any).mock.calls.map((c: any[]) =>
+        String(c[0]),
+      );
+
+      // The "event fired" metadata line is still emitted, with session id...
+      const successLine = logged.find((l: string) =>
+        l.includes("Successfully sent event"),
+      );
+      expect(successLine).toBeDefined();
+      expect(successLine).toContain("session test-session");
+
+      // ...but the full event is never dumped, and no payload value leaks.
+      expect(logged.some((l: string) => l.includes("Event details"))).toBe(
+        false,
+      );
+      expect(logged.some((l: string) => l.includes(SECRET))).toBe(false);
+    });
+
     it("should handle multiple events", async () => {
       const mockServer: MCPServerLike = {} as any;
 

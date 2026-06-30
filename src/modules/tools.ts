@@ -33,7 +33,9 @@ export function getReportMissingToolDescriptor() {
 }
 
 export function handleReportMissing(args: { context: string }) {
-  writeToLog(`Missing tool reported: ${JSON.stringify(args)}`);
+  writeToLog(
+    `Missing tool reported (context length: ${args?.context?.length ?? 0})`,
+  );
 
   return {
     content: [

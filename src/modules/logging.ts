@@ -7,6 +7,12 @@ let logFilePath: string | null = null;
 let initAttempted = false;
 let useConsoleFallback = false;
 
+let diagnosticsSink: ((entry: string) => void) | null = null;
+
+export function setDiagnosticsSink(fn: ((entry: string) => void) | null): void {
+  diagnosticsSink = fn;
+}
+
 /**
  * Attempts to initialize Node.js file logging.
  * Falls back to console.log in edge environments where fs/os modules are unavailable.
@@ -44,6 +50,13 @@ export function writeToLog(message: string): void {
 
   const timestamp = new Date().toISOString();
   const logEntry = `[${timestamp}] ${message}`;
+
+  // Tee to diagnostics if registered. Must never break logging.
+  try {
+    diagnosticsSink?.(logEntry);
+  } catch {
+    // diagnostics must never break logging
+  }
 
   if (useConsoleFallback) {
     console.log(`[mcpcat] ${logEntry}`);

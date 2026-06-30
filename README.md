@@ -132,6 +132,19 @@ mcpcat.track(server, "proj_0000", {
 
 Learn more about our free and open source [telemetry integrations](https://docs.mcpcat.io/telemetry/integrations).
 
+### Internal diagnostics
+
+To help us catch and fix broken installs, the SDK sends MCPCat a small, anonymized
+signal when setup or runtime errors occur — never your tool calls, your responses,
+or anything about your users. Records carry only operational metadata, such as your
+project ID (or an anonymous install ID when none is set). Your local `~/mcpcat.log`
+is unchanged.
+
+Diagnostics are on by default and can be turned off completely with either:
+
+- `track(server, projectId, { disableDiagnostics: true })`, or
+- the `DISABLE_DIAGNOSTICS` environment variable.
+
 ## Free for open source
 
 MCPcat is free for qualified open source projects. We believe in supporting the ecosystem that makes MCP possible. If you maintain an open source MCP server, you can access our full analytics platform at no cost.
