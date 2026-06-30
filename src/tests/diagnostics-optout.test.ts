@@ -10,7 +10,7 @@ describe("diagnostics opt-out", () => {
   beforeEach(() => _resetDiagnosticsForTest());
   afterEach(() => {
     _resetDiagnosticsForTest();
-    delete process.env.MCPCAT_DISABLE_DIAGNOSTICS;
+    delete process.env.DISABLE_DIAGNOSTICS;
   });
 
   it("is enabled by default", () => {
@@ -24,7 +24,7 @@ describe("diagnostics opt-out", () => {
   });
 
   it("is disabled via the env var", () => {
-    process.env.MCPCAT_DISABLE_DIAGNOSTICS = "1";
+    process.env.DISABLE_DIAGNOSTICS = "1";
     initDiagnostics({ projectId: "proj_1" });
     expect(isDiagnosticsEnabled()).toBe(false);
   });

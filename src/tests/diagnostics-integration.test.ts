@@ -11,14 +11,14 @@ describe("diagnostics integration with track()", () => {
 
   beforeEach(() => {
     _resetDiagnosticsForTest();
-    delete process.env.MCPCAT_DISABLE_DIAGNOSTICS;
+    delete process.env.DISABLE_DIAGNOSTICS;
     fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
     globalThis.fetch = fetchSpy;
   });
   afterEach(() => {
     _resetDiagnosticsForTest();
     globalThis.fetch = originalFetch;
-    delete process.env.MCPCAT_DISABLE_DIAGNOSTICS;
+    delete process.env.DISABLE_DIAGNOSTICS;
   });
 
   it("captures and ships diagnostics when track() runs on an invalid server", async () => {

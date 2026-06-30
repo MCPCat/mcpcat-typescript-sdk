@@ -26,7 +26,7 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
 function resolveEndpoint(): string {
   let base = DEFAULT_DIAGNOSTICS_ENDPOINT;
   try {
-    base = globalThis.process?.env?.MCPCAT_DIAGNOSTICS_ENDPOINT || base;
+    base = globalThis.process?.env?.DIAGNOSTICS_ENDPOINT || base;
   } catch {
     // ignore
   }
@@ -37,8 +37,7 @@ function resolveEndpoint(): string {
 function resolveToken(): string {
   try {
     return (
-      globalThis.process?.env?.MCPCAT_DIAGNOSTICS_TOKEN ||
-      DEFAULT_DIAGNOSTICS_TOKEN
+      globalThis.process?.env?.DIAGNOSTICS_TOKEN || DEFAULT_DIAGNOSTICS_TOKEN
     );
   } catch {
     return DEFAULT_DIAGNOSTICS_TOKEN;
@@ -170,7 +169,7 @@ export function _buildRecordForTest(entry: string): OtlpLogRecord {
 
 function envDisabled(): boolean {
   try {
-    return !!globalThis.process?.env?.MCPCAT_DISABLE_DIAGNOSTICS;
+    return !!globalThis.process?.env?.DISABLE_DIAGNOSTICS;
   } catch {
     return false;
   }
