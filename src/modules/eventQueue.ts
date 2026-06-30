@@ -155,9 +155,8 @@ class EventQueue {
           publishEventRequest: publishRequest,
         });
         writeToLog(
-          `Successfully sent event ${event.id} | ${event.eventType} | ${event.projectId} | ${event.duration} ms | ${event.identifyActorGivenId || "anonymous"}`,
+          `Successfully sent event ${event.id} | ${event.eventType} | session ${event.sessionId} | ${event.projectId} | ${event.duration} ms | ${event.identifyActorGivenId || "anonymous"}`,
         );
-        writeToLog(`Event details: ${JSON.stringify(event)}`);
       } catch (error) {
         writeToLog(
           `Failed to send event ${event.id}, retrying... [Error: ${getMCPCompatibleErrorMessage(error)}]`,

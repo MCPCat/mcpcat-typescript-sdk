@@ -178,11 +178,16 @@ function track(
     }
 
     // For high-level servers, we need to pass the underlying server to some functions
+    const isHighLevel = isHighLevelServer(validatedServer);
     const lowLevelServer = (
-      isHighLevelServer(validatedServer)
-        ? (validatedServer as any).server
-        : validatedServer
+      isHighLevel ? (validatedServer as any).server : validatedServer
     ) as MCPServerLike;
+
+    // Setup-started beacon. Guarantees every install emits at least one
+    // diagnostic tied to its project id, and anchors any later setup failure.
+    writeToLog(
+      `MCPCat setup started | project ${projectId || "(telemetry-only)"} | server ${isHighLevel ? "high-level" : "low-level"}`,
+    );
 
     // Check if server is already being tracked
     const existingData = getServerTrackingData(lowLevelServer);
@@ -230,7 +235,7 @@ function track(
     };
 
     setServerTrackingData(lowLevelServer, mcpcatData);
-    if (isHighLevelServer(validatedServer)) {
+    if (isHighLevel) {
       const highLevelServer = validatedServer as HighLevelMCPServerLike;
       setupTracking(highLevelServer);
     } else {
@@ -251,6 +256,16 @@ function track(
         }
       }
     }
+
+    // Setup-completed beacon. Pairs with the start beacon: start + complete
+    // means setup succeeded; start without complete (plus an error) localizes
+    // the failure.
+    const exporterCount = options.exporters
+      ? Object.keys(options.exporters).length
+      : 0;
+    writeToLog(
+      `MCPCat setup complete | project ${projectId || "(telemetry-only)"} | tracing=${mcpcatData.options.enableTracing} context=${mcpcatData.options.enableToolCallContext} reportMissing=${mcpcatData.options.enableReportMissing} exporters=${exporterCount}`,
+    );
 
     return validatedServer;
   } catch (error) {

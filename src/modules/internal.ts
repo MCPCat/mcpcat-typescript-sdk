@@ -185,7 +185,7 @@ export async function handleIdentify(
 
       if (hasChanged) {
         writeToLog(
-          `Identified session ${currentSessionId} with identity: ${JSON.stringify(mergedIdentity)}`,
+          `Identified session ${currentSessionId} (actor: ${mergedIdentity.userId})`,
         );
         publishEvent(server, identifyEvent);
       }

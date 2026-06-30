@@ -73,11 +73,9 @@ export class DatadogExporter implements Exporter {
     const log = this.eventToLog(event);
     const metrics = this.eventToMetrics(event);
 
-    // Debug: Log the metrics payload
+    // Debug: Log the metrics URL and count (never the serialized payload)
     writeToLog(`DatadogExporter: Metrics URL: ${this.metricsUrl}`);
-    writeToLog(
-      `DatadogExporter: Metrics payload: ${JSON.stringify({ series: metrics })}`,
-    );
+    writeToLog(`DatadogExporter: Sending ${metrics.length} metric series`);
 
     // Send logs with response checking
     const logsPromise = fetch(this.logsUrl, {
@@ -90,10 +88,7 @@ export class DatadogExporter implements Exporter {
     })
       .then(async (response) => {
         if (!response.ok) {
-          const errorBody = await response.text();
-          writeToLog(
-            `Datadog logs failed - Status: ${response.status}, Body: ${errorBody}`,
-          );
+          writeToLog(`Datadog logs failed - Status: ${response.status}`);
         } else {
           writeToLog(`Datadog logs success - Status: ${response.status}`);
         }
@@ -114,15 +109,9 @@ export class DatadogExporter implements Exporter {
     })
       .then(async (response) => {
         if (!response.ok) {
-          const errorBody = await response.text();
-          writeToLog(
-            `Datadog metrics failed - Status: ${response.status}, Body: ${errorBody}`,
-          );
+          writeToLog(`Datadog metrics failed - Status: ${response.status}`);
         } else {
-          const responseBody = await response.text();
-          writeToLog(
-            `Datadog metrics success - Status: ${response.status}, Body: ${responseBody}`,
-          );
+          writeToLog(`Datadog metrics success - Status: ${response.status}`);
         }
         return response;
       })
