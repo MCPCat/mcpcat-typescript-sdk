@@ -134,14 +134,13 @@ Learn more about our free and open source [telemetry integrations](https://docs.
 
 ### Internal diagnostics
 
-The SDK reports anonymized diagnostics (errors and setup telemetry) to MCPCat so we
-can detect when an SDK fails to set up. Each record is tagged with your project ID
-(or an anonymous install ID when none is available) plus SDK/OS/runtime metadata.
-Local `~/mcpcat.log` logging is unchanged.
+To help us catch and fix broken installs, the SDK sends MCPCat a small, anonymized
+signal when setup or runtime errors occur — never your tool calls, your responses,
+or anything about your users. Records carry only operational metadata, such as your
+project ID (or an anonymous install ID when none is set). Your local `~/mcpcat.log`
+is unchanged.
 
-Diagnostics requests carry a non-secret shared key; self-hosted collectors can override the endpoint and key via `DIAGNOSTICS_ENDPOINT` / `DIAGNOSTICS_TOKEN`.
-
-Disable it with either:
+Diagnostics are on by default and can be turned off completely with either:
 
 - `track(server, projectId, { disableDiagnostics: true })`, or
 - the `DISABLE_DIAGNOSTICS` environment variable.
