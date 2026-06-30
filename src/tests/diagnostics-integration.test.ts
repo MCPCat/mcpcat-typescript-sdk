@@ -11,6 +11,7 @@ describe("diagnostics integration with track()", () => {
 
   beforeEach(() => {
     _resetDiagnosticsForTest();
+    delete process.env.MCPCAT_DISABLE_DIAGNOSTICS;
     fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
     globalThis.fetch = fetchSpy;
   });

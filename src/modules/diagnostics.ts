@@ -94,7 +94,10 @@ function buildStaticAttributes(projectId: string | null): OtlpAttribute[] {
     // Runtime
     const proc = globalThis.process;
     out.push(
-      ...attr("process.runtime.name", proc?.versions?.node ? "node" : "other"),
+      ...attr(
+        "process.runtime.name",
+        proc?.versions?.node ? "nodejs" : "other",
+      ),
     );
     out.push(...attr("process.runtime.version", proc?.version));
     out.push(
@@ -133,8 +136,8 @@ interface OtlpLogRecord {
 }
 
 function inferSeverity(entry: string): { number: number; text: string } {
-  if (entry.includes("Warning:")) return { number: 13, text: "WARN" };
   if (/fail|error/i.test(entry)) return { number: 17, text: "ERROR" };
+  if (entry.includes("Warning:")) return { number: 13, text: "WARN" };
   return { number: 9, text: "INFO" };
 }
 

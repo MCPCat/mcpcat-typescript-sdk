@@ -31,6 +31,17 @@ describe("diagnostics record building", () => {
     );
   });
 
+  it("prioritizes fail/error over the Warning prefix", () => {
+    expect(
+      _buildRecordForTest("Warning: Failed to track server - boom")
+        .severityText,
+    ).toBe("ERROR");
+    expect(_buildRecordForTest("warning: nothing here").severityText).toBe(
+      "INFO",
+    );
+    expect(_buildRecordForTest("").severityText).toBe("INFO");
+  });
+
   it("sets a nanosecond timestamp string", () => {
     const rec = _buildRecordForTest("hello");
     expect(rec.timeUnixNano).toMatch(/^\d+$/);
